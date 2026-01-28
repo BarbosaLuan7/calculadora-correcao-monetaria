@@ -1,4 +1,5 @@
 import { type DadosExtraidos, type Autor, type TipoIndice, type TipoJuros } from '@/types'
+import { normalizeDateBR } from '@/lib/utils'
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || ''
 const WORKER_URL = 'https://calculadora-correcao-proxy.garantedireito.workers.dev'
@@ -254,10 +255,11 @@ export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> 
 
     return {
       autores,
-      dataAjuizamento: parsed.dataAjuizamento || undefined,
-      dataSentenca: parsed.dataSentenca || undefined,
-      dataCitacao: parsed.dataCitacao || undefined,
-      dataBase: parsed.dataBase || undefined,
+      // Normaliza datas para formato DD/MM/YYYY (trata MM/YYYY -> 01/MM/YYYY)
+      dataAjuizamento: normalizeDateBR(parsed.dataAjuizamento),
+      dataSentenca: normalizeDateBR(parsed.dataSentenca),
+      dataCitacao: normalizeDateBR(parsed.dataCitacao),
+      dataBase: normalizeDateBR(parsed.dataBase),
       indiceCorrecao: parsed.indiceCorrecao as TipoIndice || undefined,
       tipoJuros: parsed.tipoJuros as TipoJuros || undefined,
       tribunal: parsed.tribunal || undefined,

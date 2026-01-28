@@ -17,12 +17,23 @@ export function formatDate(date: Date): string {
 }
 
 export function parseDateBR(dateStr: string): Date | null {
-  // Aceita formato DD/MM/YYYY ou YYYY-MM-DD
+  // Aceita formatos: DD/MM/YYYY, MM/YYYY, YYYY-MM-DD
   if (!dateStr) return null
 
   if (dateStr.includes('/')) {
-    const [day, month, year] = dateStr.split('/')
-    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    const parts = dateStr.split('/')
+
+    // Formato MM/YYYY (2 partes) - assume dia 01
+    if (parts.length === 2) {
+      const [month, year] = parts
+      return new Date(parseInt(year), parseInt(month) - 1, 1)
+    }
+
+    // Formato DD/MM/YYYY (3 partes)
+    if (parts.length === 3) {
+      const [day, month, year] = parts
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    }
   }
 
   if (dateStr.includes('-')) {
@@ -45,6 +56,19 @@ export function formatDateToBR(date: Date): string {
 
 export function formatPercent(value: number): string {
   return `${value.toFixed(4)}%`
+}
+
+/**
+ * Normaliza uma data para o formato DD/MM/YYYY
+ * Aceita: DD/MM/YYYY, MM/YYYY (assume dia 01), YYYY-MM-DD
+ */
+export function normalizeDateBR(dateStr: string | null | undefined): string | undefined {
+  if (!dateStr) return undefined
+
+  const date = parseDateBR(dateStr)
+  if (!date || isNaN(date.getTime())) return undefined
+
+  return formatDateToBR(date)
 }
 
 export function parseNumber(value: string): number {
