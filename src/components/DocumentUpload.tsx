@@ -122,13 +122,6 @@ export function DocumentUpload({ onDataExtracted, apiKeyConfigured }: DocumentUp
           </div>
         )}
 
-        {!apiKeyConfigured && (
-          <div className="mt-4 p-3 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              Configure a variável VITE_ANTHROPIC_API_KEY no arquivo .env para habilitar a extração automática.
-            </p>
-          </div>
-        )}
       </CardContent>
     </Card>
   )

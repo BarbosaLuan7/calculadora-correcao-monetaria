@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Calculator as CalculatorIcon, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw, Calculator as CalculatorIcon } from 'lucide-react'
+import LogoLB from '@/assets/logo-lb.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -156,20 +157,30 @@ export function Calculator() {
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
-          <CalculatorIcon className="h-6 w-6" />
-          Calculadora de Correção Monetária
-        </h1>
-        <p className="text-muted-foreground">
-          Cálculo de correção monetária e juros de mora para cumprimento de sentença
-        </p>
+      <header className="bg-[#2f3a44] -mx-4 -mt-4 px-4 py-8 sm:py-10 mb-6 rounded-b-lg">
+        <div className="flex flex-col items-center gap-5">
+          {/* Logo responsiva: maior em desktop, menor em mobile */}
+          <img
+            src={LogoLB}
+            alt="Luan Barbosa Advocacia Especializada"
+            className="w-64 sm:w-80 md:w-96 lg:w-[28rem] h-auto max-w-full"
+          />
+          <div className="text-center space-y-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-light tracking-wider text-white flex items-center justify-center gap-2">
+              <CalculatorIcon className="h-5 w-5 sm:h-6 sm:w-6 text-[#93784a]" />
+              Calculadora de Correção Monetária
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-300">
+              Correção monetária e juros de mora para cumprimento de sentença
+            </p>
+          </div>
+        </div>
         {bcbOnline !== null && (
-          <p className={`text-xs ${bcbOnline ? 'text-green-600' : 'text-yellow-600'}`}>
+          <p className={`text-xs text-center mt-3 ${bcbOnline ? 'text-green-400' : 'text-yellow-400'}`}>
             API BCB: {bcbOnline ? 'Online' : 'Offline (usando cache)'}
           </p>
         )}
-      </div>
+      </header>
 
       {/* Upload de documento */}
       <DocumentUpload
