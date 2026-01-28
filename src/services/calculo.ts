@@ -17,9 +17,11 @@
 import {
   type TipoIndice,
   type TipoJuros,
+  type TipoVerba,
   type Autor,
   type IndiceData,
   type ResultadoCalculo,
+  type ResultadoVerba,
   type DetalheCalculo
 } from '@/types'
 import { buscarIndicesComCache } from './cache'
@@ -98,15 +100,178 @@ async function calcularJurosSelicMenosIPCA(
 }
 
 /**
+ * Parâmetros para cálculo de uma verba individual
+ */
+interface ParametrosVerba {
+  tipo: TipoVerba
+  valor: number
+  dataCorrecao: string // Data base para correção monetária
+  dataJuros: string // Data base para juros de mora (citação)
+  dataCalculo: string
+  indiceCorrecao: TipoIndice
+  tipoJuros: TipoJuros
+}
+
+/**
+ * Calcula correção monetária e juros para uma verba individual
+ */
+export async function calcularVerba(params: ParametrosVerba): Promise<ResultadoVerba> {
+  const { tipo, valor, dataCorrecao, dataJuros, dataCalculo, indiceCorrecao, tipoJuros } = params
+
+  const dataCorrecaoDate = parseDateBR(dataCorrecao)!
+  const dataJurosDate = parseDateBR(dataJuros)!
+  const dataCalculoDate = parseDateBR(dataCalculo)!
+
+  // Busca índices de correção (a partir da data base de correção)
+  const indices = await buscarIndicesComCache(
+    indiceCorrecao,
+    dataCorrecaoDate,
+    dataCalculoDate
+  )
+
+  // Calcula fator de correção
+  const fatorCorrecao = calcularFatorCorrecao(indices)
+  const valorCorrigido = valor * fatorCorrecao
+
+  // Calcula juros (a partir da data de citação)
+  let percentualJuros = 0
+
+  switch (tipoJuros) {
+    case '1_PORCENTO': {
+      const juros = calcularJuros1Porcento(dataJurosDate, dataCalculoDate)
+      percentualJuros = juros.percentual
+      break
+    }
+    case 'SELIC': {
+      const juros = await calcularJurosSelic(dataJurosDate, dataCalculoDate)
+      percentualJuros = juros.percentual
+      break
+    }
+    case 'SELIC_MENOS_IPCA': {
+      const juros = await calcularJurosSelicMenosIPCA(dataJurosDate, dataCalculoDate)
+      percentualJuros = juros.percentual
+      break
+    }
+  }
+
+  const valorJuros = valorCorrigido * percentualJuros
+  const valorTotal = valorCorrigido + valorJuros
+
+  // Monta detalhamento mensal
+  const detalhamento: DetalheCalculo[] = []
+  let fatorAcumulado = 1
+
+  for (const indice of indices) {
+    fatorAcumulado *= (1 + indice.valor / 100)
+    const valorCorrigidoPeriodo = valor * fatorAcumulado
+
+    detalhamento.push({
+      periodo: indice.data,
+      indiceMes: indice.valor,
+      fatorAcumulado,
+      valorCorrigidoPeriodo,
+      jurosPeriodo: 0 // Simplificado, juros calculado no final
+    })
+  }
+
+  return {
+    tipo,
+    valorPrincipal: valor,
+    valorCorrigido,
+    valorJuros,
+    valorTotal,
+    fatorCorrecao,
+    percentualJuros,
+    detalhamento
+  }
+}
+
+/**
  * Calcula correção monetária e juros para um autor
+ * Suporta verbas separadas (dano moral e material) com datas diferentes
  */
 export async function calcularCorrecao(
   autor: Autor,
   indiceCorrecao: TipoIndice,
   tipoJuros: TipoJuros,
   dataCitacao: string,
-  dataCalculo: string
+  dataCalculo: string,
+  dataAjuizamento?: string,
+  dataSentenca?: string
 ): Promise<ResultadoCalculo> {
+  // Verifica se tem verbas separadas
+  const temDanoMaterial = (autor.valorDanoMaterial ?? 0) > 0
+  const temDanoMoral = (autor.valorDanoMoral ?? 0) > 0
+  const temVerbasSeparadas = temDanoMaterial || temDanoMoral
+
+  // Se tem verbas separadas, calcula cada uma independentemente
+  if (temVerbasSeparadas) {
+    let resultadoMaterial: ResultadoVerba | undefined
+    let resultadoMoral: ResultadoVerba | undefined
+
+    // Calcula dano material (correção desde ajuizamento)
+    if (temDanoMaterial) {
+      const dataCorrecaoMaterial = dataAjuizamento || dataCitacao
+      resultadoMaterial = await calcularVerba({
+        tipo: 'MATERIAL',
+        valor: autor.valorDanoMaterial!,
+        dataCorrecao: dataCorrecaoMaterial,
+        dataJuros: dataCitacao,
+        dataCalculo,
+        indiceCorrecao,
+        tipoJuros
+      })
+    }
+
+    // Calcula dano moral (correção desde sentença - Súmula 362 STJ)
+    if (temDanoMoral) {
+      const dataCorrecaoMoral = dataSentenca || dataCitacao
+      resultadoMoral = await calcularVerba({
+        tipo: 'MORAL',
+        valor: autor.valorDanoMoral!,
+        dataCorrecao: dataCorrecaoMoral,
+        dataJuros: dataCitacao,
+        dataCalculo,
+        indiceCorrecao,
+        tipoJuros
+      })
+    }
+
+    // Consolida totais
+    const valorPrincipal = (resultadoMaterial?.valorPrincipal ?? 0) + (resultadoMoral?.valorPrincipal ?? 0)
+    const valorCorrigido = (resultadoMaterial?.valorCorrigido ?? 0) + (resultadoMoral?.valorCorrigido ?? 0)
+    const valorJuros = (resultadoMaterial?.valorJuros ?? 0) + (resultadoMoral?.valorJuros ?? 0)
+    const valorTotal = (resultadoMaterial?.valorTotal ?? 0) + (resultadoMoral?.valorTotal ?? 0)
+
+    // Fator e percentual médios ponderados
+    const fatorCorrecao = valorPrincipal > 0 ? valorCorrigido / valorPrincipal : 1
+    const percentualJuros = valorCorrigido > 0 ? valorJuros / valorCorrigido : 0
+
+    // Combina detalhamento (prioriza material, depois moral)
+    const detalhamento = resultadoMaterial?.detalhamento || resultadoMoral?.detalhamento || []
+
+    return {
+      autor: {
+        ...autor,
+        resultadoMaterial,
+        resultadoMoral,
+        valorCorrigido,
+        valorJuros,
+        valorTotal
+      },
+      valorPrincipal,
+      valorCorrigido,
+      valorJuros,
+      valorTotal,
+      fatorCorrecao,
+      percentualJuros,
+      detalhamento,
+      resultadoMaterial,
+      resultadoMoral
+    }
+  }
+
+  // Modo legado: usa valorPrincipal único
   const dataCitacaoDate = parseDateBR(dataCitacao)!
   const dataCalculoDate = parseDateBR(dataCalculo)!
 
@@ -187,7 +352,9 @@ export async function calcularCorrecaoMultiplosAutores(
   indiceCorrecao: TipoIndice,
   tipoJuros: TipoJuros,
   dataCitacao: string,
-  dataCalculo: string
+  dataCalculo: string,
+  dataAjuizamento?: string,
+  dataSentenca?: string
 ): Promise<ResultadoCalculo[]> {
   const resultados: ResultadoCalculo[] = []
 
@@ -197,7 +364,9 @@ export async function calcularCorrecaoMultiplosAutores(
       indiceCorrecao,
       tipoJuros,
       dataCitacao,
-      dataCalculo
+      dataCalculo,
+      dataAjuizamento,
+      dataSentenca
     )
     resultados.push(resultado)
   }

@@ -40,12 +40,17 @@ Analise o documento anexo (sentença judicial) e extraia as seguintes informaç�
     {
       "nome": "Nome completo do autor",
       "cpf": "CPF se disponível",
-      "valorPrincipal": 0 // Valor em número (sem R$, sem pontos, vírgula como decimal)
+      "valorPrincipal": 0, // Valor total único se não separar danos
+      "valorDanoMaterial": 0, // Valor do dano material se especificado separadamente
+      "valorDanoMoral": 0 // Valor do dano moral se especificado separadamente
     }
   ],
-  "dataBase": "DD/MM/YYYY", // Data base para correção monetária
-  "indiceCorrecao": "IPCA" | "INPC" | "IGP-M" | "SELIC" | "TR", // Índice determinado na sentença
-  "tipoJuros": "SELIC" | "1_PORCENTO" | "SELIC_MENOS_IPCA", // Tipo de juros de mora
+  "dataAjuizamento": "DD/MM/YYYY", // Data de ajuizamento do processo
+  "dataSentenca": "DD/MM/YYYY", // Data da sentença
+  "dataCitacao": "DD/MM/YYYY", // Data da citação válida
+  "dataBase": "DD/MM/YYYY", // Data base genérica (fallback)
+  "indiceCorrecao": "IPCA" | "INPC" | "IGP-M" | "SELIC" | "TR",
+  "tipoJuros": "SELIC" | "1_PORCENTO" | "SELIC_MENOS_IPCA",
   "tribunal": "Ex: TJSP, TJRJ, TRF1",
   "numeroProcesso": "Número completo do processo",
   "vara": "Nome da vara"
@@ -53,23 +58,35 @@ Analise o documento anexo (sentença judicial) e extraia as seguintes informaç�
 
 REGRAS DE EXTRAÇÃO:
 
-1. **Autores**: Identifique TODOS os autores/requerentes listados. Se houver valores individuais, extraia separadamente. Se houver apenas valor total, distribua igualmente.
+1. **Autores**: Identifique TODOS os autores/requerentes listados.
 
-2. **Índice de Correção**:
+2. **VALORES - MUITO IMPORTANTE**:
+   - Se a sentença especifica valores SEPARADOS para dano moral e dano material, preencha "valorDanoMaterial" e "valorDanoMoral"
+   - Se há apenas um valor total, preencha "valorPrincipal"
+   - Exemplos de dano material: despesas médicas, lucros cessantes, prejuízos financeiros, passagens
+   - Exemplos de dano moral: indenização por sofrimento, abalo psicológico, constrangimento
+   - Converta "R$ 10.000,00" para 10000.00
+
+3. **DATAS DO PROCESSO - MUITO IMPORTANTE**:
+   - "dataAjuizamento": procure por "ajuizada em", "distribuída em", "proposta em", "data da distribuição"
+   - "dataSentenca": procure por "sentença proferida em", "julgado em", data no cabeçalho/rodapé da sentença
+   - "dataCitacao": procure por "citado em", "citação válida em", "AR juntado em"
+   - Estas datas são essenciais pois:
+     * Dano material: correção desde o ajuizamento
+     * Dano moral: correção desde a sentença (Súmula 362 STJ)
+     * Juros de mora: desde a citação
+
+4. **Índice de Correção**:
    - "IPCA" - se mencionar IPCA, Índice de Preços ao Consumidor Amplo, ou "índice oficial"
    - "INPC" - se mencionar INPC, Índice Nacional de Preços ao Consumidor
    - "IGP-M" - se mencionar IGP-M ou Índice Geral de Preços do Mercado
    - "SELIC" - se determinar correção pela Selic
    - "TR" - se mencionar Taxa Referencial
 
-3. **Juros de Mora**:
+5. **Juros de Mora**:
    - "1_PORCENTO" - se mencionar 1% ao mês ou 12% ao ano
    - "SELIC" - se determinar juros pela Selic
    - "SELIC_MENOS_IPCA" - se mencionar "Selic menos IPCA" ou "juros reais"
-
-4. **Data Base**: Procure por expressões como "a partir de", "desde", "data do ajuizamento", "data do dano".
-
-5. **Valores**: Extraia valores numéricos. Converta "R$ 10.000,00" para 10000.00.
 
 Se alguma informação não estiver disponível, deixe como null.
 
@@ -147,16 +164,34 @@ export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> 
   try {
     const parsed = JSON.parse(jsonStr.trim())
 
+    // Função auxiliar para converter valor
+    const parseValor = (v: unknown): number => {
+      if (typeof v === 'number') return v
+      if (typeof v === 'string') return parseFloat(v) || 0
+      return 0
+    }
+
     // Converte para formato esperado
-    const autores: Autor[] = (parsed.autores || []).map((a: { nome: string; cpf?: string; valorPrincipal: number }, i: number) => ({
+    const autores: Autor[] = (parsed.autores || []).map((a: {
+      nome: string
+      cpf?: string
+      valorPrincipal?: number
+      valorDanoMaterial?: number
+      valorDanoMoral?: number
+    }, i: number) => ({
       id: `autor-${i + 1}`,
       nome: a.nome,
       cpf: a.cpf,
-      valorPrincipal: typeof a.valorPrincipal === 'number' ? a.valorPrincipal : parseFloat(a.valorPrincipal) || 0
+      valorPrincipal: parseValor(a.valorPrincipal),
+      valorDanoMaterial: parseValor(a.valorDanoMaterial) || undefined,
+      valorDanoMoral: parseValor(a.valorDanoMoral) || undefined
     }))
 
     return {
       autores,
+      dataAjuizamento: parsed.dataAjuizamento || undefined,
+      dataSentenca: parsed.dataSentenca || undefined,
+      dataCitacao: parsed.dataCitacao || undefined,
       dataBase: parsed.dataBase || undefined,
       indiceCorrecao: parsed.indiceCorrecao as TipoIndice || undefined,
       tipoJuros: parsed.tipoJuros as TipoJuros || undefined,

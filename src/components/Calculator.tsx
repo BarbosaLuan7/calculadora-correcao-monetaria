@@ -32,8 +32,13 @@ export function Calculator() {
   const [numeroProcesso, setNumeroProcesso] = useState('')
   const [tribunal, setTribunal] = useState('')
   const [vara, setVara] = useState('')
-  const [dataCitacao, setDataCitacao] = useState('')
+
+  // Datas do processo
+  const [dataAjuizamento, setDataAjuizamento] = useState('') // Correção dano material
+  const [dataSentenca, setDataSentenca] = useState('') // Correção dano moral (Súmula 362 STJ)
+  const [dataCitacao, setDataCitacao] = useState('') // Juros de mora
   const [dataCalculo, setDataCalculo] = useState(formatDateToBR(new Date()))
+
   const [indiceCorrecao, setIndiceCorrecao] = useState<TipoIndice>('IPCA')
   const [tipoJuros, setTipoJuros] = useState<TipoJuros>('1_PORCENTO')
   const [autores, setAutores] = useState<Autor[]>([{
@@ -65,7 +70,14 @@ export function Calculator() {
     if (data.vara) setVara(data.vara)
     if (data.indiceCorrecao) setIndiceCorrecao(data.indiceCorrecao)
     if (data.tipoJuros) setTipoJuros(data.tipoJuros)
-    if (data.dataBase) setDataCitacao(data.dataBase)
+
+    // Novas datas do processo
+    if (data.dataAjuizamento) setDataAjuizamento(data.dataAjuizamento)
+    if (data.dataSentenca) setDataSentenca(data.dataSentenca)
+    if (data.dataCitacao) setDataCitacao(data.dataCitacao)
+
+    // Fallback para campo legado
+    if (data.dataBase && !data.dataCitacao) setDataCitacao(data.dataBase)
   }
 
   // Calcular correção
@@ -76,9 +88,28 @@ export function Calculator() {
       return
     }
 
-    const autoresValidos = autores.filter(a => a.valorPrincipal > 0)
+    // Verifica se tem pelo menos um valor (principal, dano material ou dano moral)
+    const autoresValidos = autores.filter(a =>
+      a.valorPrincipal > 0 ||
+      (a.valorDanoMaterial ?? 0) > 0 ||
+      (a.valorDanoMoral ?? 0) > 0
+    )
     if (autoresValidos.length === 0) {
-      setError('Informe pelo menos um autor com valor principal')
+      setError('Informe pelo menos um autor com valor')
+      return
+    }
+
+    // Validação de datas para verbas separadas
+    const temDanoMaterial = autoresValidos.some(a => (a.valorDanoMaterial ?? 0) > 0)
+    const temDanoMoral = autoresValidos.some(a => (a.valorDanoMoral ?? 0) > 0)
+
+    if (temDanoMaterial && !dataAjuizamento) {
+      setError('Informe a data de ajuizamento para correção do dano material')
+      return
+    }
+
+    if (temDanoMoral && !dataSentenca) {
+      setError('Informe a data da sentença para correção do dano moral (Súmula 362 STJ)')
       return
     }
 
@@ -92,7 +123,9 @@ export function Calculator() {
         indiceCorrecao,
         tipoJuros,
         dataCitacao,
-        dataCalculo
+        dataCalculo,
+        dataAjuizamento || undefined,
+        dataSentenca || undefined
       )
       setResultados(results)
     } catch (err) {
@@ -107,6 +140,8 @@ export function Calculator() {
     setNumeroProcesso('')
     setTribunal('')
     setVara('')
+    setDataAjuizamento('')
+    setDataSentenca('')
     setDataCitacao('')
     setDataCalculo(formatDateToBR(new Date()))
     setIndiceCorrecao('IPCA')
@@ -181,15 +216,42 @@ export function Calculator() {
         </CardContent>
       </Card>
 
-      {/* Parâmetros de cálculo */}
+      {/* Datas do Processo */}
       <Card>
         <CardHeader>
-          <CardTitle>Parâmetros de Cálculo</CardTitle>
+          <CardTitle>Datas do Processo</CardTitle>
           <CardDescription>
-            Configure o índice de correção e tipo de juros
+            Datas base para correção monetária e juros de mora
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="dataAjuizamento">Data de Ajuizamento</Label>
+              <Input
+                id="dataAjuizamento"
+                placeholder="DD/MM/AAAA"
+                value={dataAjuizamento}
+                onChange={(e) => setDataAjuizamento(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Correção monetária do dano material
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dataSentenca">Data da Sentença</Label>
+              <Input
+                id="dataSentenca"
+                placeholder="DD/MM/AAAA"
+                value={dataSentenca}
+                onChange={(e) => setDataSentenca(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Correção monetária do dano moral (Súmula 362 STJ)
+              </p>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="dataCitacao">Data da Citação *</Label>
@@ -200,7 +262,7 @@ export function Calculator() {
                 onChange={(e) => setDataCitacao(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Início da contagem dos juros de mora
+                Início dos juros de mora (obrigatório)
               </p>
             </div>
             <div className="space-y-2">
@@ -211,9 +273,23 @@ export function Calculator() {
                 value={dataCalculo}
                 onChange={(e) => setDataCalculo(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Data final do cálculo (geralmente hoje)
+              </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
+      {/* Parâmetros de cálculo */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Parâmetros de Cálculo</CardTitle>
+          <CardDescription>
+            Configure o índice de correção e tipo de juros
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="indiceCorrecao">Índice de Correção</Label>
@@ -297,6 +373,8 @@ export function Calculator() {
           numeroProcesso,
           tribunal,
           vara,
+          dataAjuizamento,
+          dataSentenca,
           dataCitacao,
           dataCalculo,
           indiceCorrecao,

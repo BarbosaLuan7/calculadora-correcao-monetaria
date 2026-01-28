@@ -12,6 +12,8 @@ interface ResultPanelProps {
     numeroProcesso: string
     tribunal: string
     vara: string
+    dataAjuizamento?: string
+    dataSentenca?: string
     dataCitacao: string
     dataCalculo: string
     indiceCorrecao: TipoIndice
@@ -24,8 +26,12 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
     principal: resultados.reduce((sum, r) => sum + r.valorPrincipal, 0),
     corrigido: resultados.reduce((sum, r) => sum + r.valorCorrigido, 0),
     juros: resultados.reduce((sum, r) => sum + r.valorJuros, 0),
-    total: resultados.reduce((sum, r) => sum + r.valorTotal, 0)
+    total: resultados.reduce((sum, r) => sum + r.valorTotal, 0),
+    material: resultados.reduce((sum, r) => sum + (r.resultadoMaterial?.valorTotal ?? 0), 0),
+    moral: resultados.reduce((sum, r) => sum + (r.resultadoMoral?.valorTotal ?? 0), 0)
   }
+
+  const temVerbasSeparadas = totais.material > 0 || totais.moral > 0
 
   const handleDownloadPDF = () => {
     salvarMemoriaPDF({
@@ -63,9 +69,18 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-3 font-medium">Autor</th>
-                <th className="text-right py-2 px-3 font-medium">Principal</th>
-                <th className="text-right py-2 px-3 font-medium">Corrigido</th>
-                <th className="text-right py-2 px-3 font-medium">Juros</th>
+                {temVerbasSeparadas ? (
+                  <>
+                    <th className="text-right py-2 px-3 font-medium">D. Material</th>
+                    <th className="text-right py-2 px-3 font-medium">D. Moral</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="text-right py-2 px-3 font-medium">Principal</th>
+                    <th className="text-right py-2 px-3 font-medium">Corrigido</th>
+                    <th className="text-right py-2 px-3 font-medium">Juros</th>
+                  </>
+                )}
                 <th className="text-right py-2 px-3 font-medium">Total</th>
               </tr>
             </thead>
@@ -80,19 +95,50 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
                       )}
                     </div>
                   </td>
-                  <td className="text-right py-2 px-3">{formatCurrency(r.valorPrincipal)}</td>
-                  <td className="text-right py-2 px-3">
-                    <div>{formatCurrency(r.valorCorrigido)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      fator: {r.fatorCorrecao.toFixed(6)}
-                    </div>
-                  </td>
-                  <td className="text-right py-2 px-3">
-                    <div>{formatCurrency(r.valorJuros)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatPercent(r.percentualJuros * 100)}
-                    </div>
-                  </td>
+                  {temVerbasSeparadas ? (
+                    <>
+                      <td className="text-right py-2 px-3">
+                        {r.resultadoMaterial ? (
+                          <div>
+                            <div>{formatCurrency(r.resultadoMaterial.valorTotal)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              principal: {formatCurrency(r.resultadoMaterial.valorPrincipal)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                      <td className="text-right py-2 px-3">
+                        {r.resultadoMoral ? (
+                          <div>
+                            <div>{formatCurrency(r.resultadoMoral.valorTotal)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              principal: {formatCurrency(r.resultadoMoral.valorPrincipal)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="text-right py-2 px-3">{formatCurrency(r.valorPrincipal)}</td>
+                      <td className="text-right py-2 px-3">
+                        <div>{formatCurrency(r.valorCorrigido)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          fator: {r.fatorCorrecao.toFixed(6)}
+                        </div>
+                      </td>
+                      <td className="text-right py-2 px-3">
+                        <div>{formatCurrency(r.valorJuros)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatPercent(r.percentualJuros * 100)}
+                        </div>
+                      </td>
+                    </>
+                  )}
                   <td className="text-right py-2 px-3 font-medium">{formatCurrency(r.valorTotal)}</td>
                 </tr>
               ))}
@@ -101,15 +147,48 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
               <tfoot>
                 <tr className="bg-muted/50 font-medium">
                   <td className="py-2 px-3">TOTAL</td>
-                  <td className="text-right py-2 px-3">{formatCurrency(totais.principal)}</td>
-                  <td className="text-right py-2 px-3">{formatCurrency(totais.corrigido)}</td>
-                  <td className="text-right py-2 px-3">{formatCurrency(totais.juros)}</td>
+                  {temVerbasSeparadas ? (
+                    <>
+                      <td className="text-right py-2 px-3">{formatCurrency(totais.material)}</td>
+                      <td className="text-right py-2 px-3">{formatCurrency(totais.moral)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="text-right py-2 px-3">{formatCurrency(totais.principal)}</td>
+                      <td className="text-right py-2 px-3">{formatCurrency(totais.corrigido)}</td>
+                      <td className="text-right py-2 px-3">{formatCurrency(totais.juros)}</td>
+                    </>
+                  )}
                   <td className="text-right py-2 px-3">{formatCurrency(totais.total)}</td>
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
+
+        {/* Resumo das verbas quando tem separação */}
+        {temVerbasSeparadas && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {totais.material > 0 && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground">Dano Material (total)</p>
+                <p className="text-lg font-semibold">{formatCurrency(totais.material)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Correção desde {dadosProcesso.dataAjuizamento || dadosProcesso.dataCitacao}
+                </p>
+              </div>
+            )}
+            {totais.moral > 0 && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-sm text-muted-foreground">Dano Moral (total)</p>
+                <p className="text-lg font-semibold">{formatCurrency(totais.moral)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Correção desde {dadosProcesso.dataSentenca || dadosProcesso.dataCitacao} (Súmula 362 STJ)
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Total em destaque */}
         <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">

@@ -1,8 +1,33 @@
+export type TipoVerba = 'MATERIAL' | 'MORAL'
+
+export interface ResultadoVerba {
+  tipo: TipoVerba
+  valorPrincipal: number
+  valorCorrigido: number
+  valorJuros: number
+  valorTotal: number
+  fatorCorrecao: number
+  percentualJuros: number
+  detalhamento: DetalheCalculo[]
+}
+
 export interface Autor {
   id: string
   nome: string
   cpf?: string
+
+  // Campo legado (mantido para retrocompatibilidade)
   valorPrincipal: number
+
+  // Valores separados por verba
+  valorDanoMaterial?: number
+  valorDanoMoral?: number
+
+  // Resultados calculados por verba
+  resultadoMaterial?: ResultadoVerba
+  resultadoMoral?: ResultadoVerba
+
+  // Totais consolidados
   valorCorrigido?: number
   valorJuros?: number
   valorTotal?: number
@@ -19,7 +44,10 @@ export type TipoJuros = 'SELIC' | '1_PORCENTO' | 'SELIC_MENOS_IPCA'
 
 export interface DadosExtraidos {
   autores: Autor[]
-  dataBase?: string // Data base para correção
+  dataBase?: string // Data base para correção (legado)
+  dataAjuizamento?: string // Data de ajuizamento (para dano material)
+  dataSentenca?: string // Data da sentença (para dano moral - Súmula 362 STJ)
+  dataCitacao?: string // Data da citação (para juros de mora)
   indiceCorrecao?: TipoIndice
   tipoJuros?: TipoJuros
   tribunal?: string
@@ -28,7 +56,9 @@ export interface DadosExtraidos {
 }
 
 export interface ParametrosCalculo {
-  dataCitacao: string // DD/MM/YYYY
+  dataCitacao: string // DD/MM/YYYY - início dos juros de mora
+  dataAjuizamento?: string // DD/MM/YYYY - correção do dano material
+  dataSentenca?: string // DD/MM/YYYY - correção do dano moral (Súmula 362 STJ)
   dataCalculo: string // DD/MM/YYYY - geralmente hoje
   indiceCorrecao: TipoIndice
   tipoJuros: TipoJuros
@@ -44,6 +74,10 @@ export interface ResultadoCalculo {
   fatorCorrecao: number
   percentualJuros: number
   detalhamento: DetalheCalculo[]
+
+  // Resultados separados por verba (quando aplicável)
+  resultadoMaterial?: ResultadoVerba
+  resultadoMoral?: ResultadoVerba
 }
 
 export interface DetalheCalculo {

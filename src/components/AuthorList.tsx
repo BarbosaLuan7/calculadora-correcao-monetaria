@@ -33,10 +33,15 @@ export function AuthorList({ autores, onChange }: AuthorListProps) {
     }))
   }
 
-  const handleValorChange = (id: string, valorStr: string) => {
+  const handleValorChange = (id: string, campo: 'valorPrincipal' | 'valorDanoMaterial' | 'valorDanoMoral', valorStr: string) => {
     const valor = parseNumber(valorStr)
-    atualizarAutor(id, 'valorPrincipal', valor)
+    atualizarAutor(id, campo, valor)
   }
+
+  // Verifica se algum autor tem verbas separadas
+  const temVerbasSeparadas = autores.some(a =>
+    (a.valorDanoMaterial ?? 0) > 0 || (a.valorDanoMoral ?? 0) > 0
+  )
 
   return (
     <Card>
@@ -90,15 +95,61 @@ export function AuthorList({ autores, onChange }: AuthorListProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor={`valor-${autor.id}`}>Valor Principal (R$)</Label>
-              <Input
-                id={`valor-${autor.id}`}
-                placeholder="0,00"
-                value={autor.valorPrincipal ? formatNumberBR(autor.valorPrincipal) : ''}
-                onChange={(e) => handleValorChange(autor.id, e.target.value)}
-              />
+            {/* Valores separados por verba */}
+            <div className="border-t pt-3 mt-3">
+              <p className="text-sm font-medium text-muted-foreground mb-2">
+                Valores por Tipo de Dano
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Preencha os valores separados. Se tiver apenas um valor total, use o campo "Valor Principal" abaixo.
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={`dano-material-${autor.id}`}>Dano Material (R$)</Label>
+                  <Input
+                    id={`dano-material-${autor.id}`}
+                    placeholder="0,00"
+                    value={autor.valorDanoMaterial ? formatNumberBR(autor.valorDanoMaterial) : ''}
+                    onChange={(e) => handleValorChange(autor.id, 'valorDanoMaterial', e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Correção desde ajuizamento
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`dano-moral-${autor.id}`}>Dano Moral (R$)</Label>
+                  <Input
+                    id={`dano-moral-${autor.id}`}
+                    placeholder="0,00"
+                    value={autor.valorDanoMoral ? formatNumberBR(autor.valorDanoMoral) : ''}
+                    onChange={(e) => handleValorChange(autor.id, 'valorDanoMoral', e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Correção desde sentença
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* Campo legado para valor único */}
+            {!temVerbasSeparadas && (
+              <div className="space-y-2 border-t pt-3 mt-3">
+                <Label htmlFor={`valor-${autor.id}`}>
+                  Valor Principal (R$)
+                  <span className="text-xs text-muted-foreground ml-2">
+                    (use apenas se não separar dano moral/material)
+                  </span>
+                </Label>
+                <Input
+                  id={`valor-${autor.id}`}
+                  placeholder="0,00"
+                  value={autor.valorPrincipal ? formatNumberBR(autor.valorPrincipal) : ''}
+                  onChange={(e) => handleValorChange(autor.id, 'valorPrincipal', e.target.value)}
+                />
+              </div>
+            )}
           </div>
         ))}
 
