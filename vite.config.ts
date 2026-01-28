@@ -5,8 +5,10 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const isProduction = mode === 'production'
 
   return {
+    base: isProduction ? '/calculadora-correcao-monetaria/' : '/',
     plugins: [react()],
     resolve: {
       alias: {

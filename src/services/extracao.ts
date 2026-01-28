@@ -1,6 +1,8 @@
 import { type DadosExtraidos, type Autor, type TipoIndice, type TipoJuros } from '@/types'
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || ''
+const WORKER_URL = 'https://calculadora-correcao-proxy.garantedireito.workers.dev'
+const IS_PRODUCTION = import.meta.env.PROD
 
 interface AnthropicMessage {
   role: 'user' | 'assistant'
@@ -123,7 +125,10 @@ export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> 
     }
   ]
 
-  const response = await fetch('/api/anthropic/v1/messages', {
+  // Em produção usa o Worker do Cloudflare, em dev usa o proxy do Vite
+  const apiUrl = IS_PRODUCTION ? WORKER_URL : '/api/anthropic/v1/messages'
+
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
