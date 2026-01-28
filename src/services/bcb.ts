@@ -62,6 +62,11 @@ export async function buscarIndice(
 ): Promise<IndiceData[]> {
   const codigo = CODIGOS_SERIES_BCB[tipo]
 
+  // Valida se as datas são válidas
+  if (isNaN(dataInicial.getTime()) || isNaN(dataFinal.getTime())) {
+    throw new Error('Datas inválidas. Use o formato DD/MM/AAAA.')
+  }
+
   // Formata datas para DD/MM/YYYY
   const formatDate = (d: Date) => {
     const day = d.getDate().toString().padStart(2, '0')
