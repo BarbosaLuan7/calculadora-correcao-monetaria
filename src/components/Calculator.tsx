@@ -57,7 +57,9 @@ export function Calculator() {
   // Verifica conexão com BCB e API key ao carregar
   useEffect(() => {
     verificarConexaoBCB().then(setBcbOnline)
-    setApiKeyConfigured(!!import.meta.env.VITE_ANTHROPIC_API_KEY)
+    // Em produção usa o Worker, em dev precisa da API key
+    const isProduction = import.meta.env.PROD
+    setApiKeyConfigured(isProduction || !!import.meta.env.VITE_ANTHROPIC_API_KEY)
   }, [])
 
   // Handler para dados extraídos do documento

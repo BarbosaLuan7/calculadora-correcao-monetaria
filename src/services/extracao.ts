@@ -98,7 +98,8 @@ IMPORTANTE: Retorne APENAS o JSON, sem explicações adicionais.`
  * Extrai dados de uma sentença usando Claude API
  */
 export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> {
-  if (!CLAUDE_API_KEY) {
+  // Em produção usa o Worker (não precisa de API key local)
+  if (!IS_PRODUCTION && !CLAUDE_API_KEY) {
     throw new Error('API key do Claude não configurada. Defina VITE_ANTHROPIC_API_KEY no arquivo .env')
   }
 
