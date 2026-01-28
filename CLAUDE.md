@@ -86,8 +86,30 @@ npm run lint     # Linting
 
 ## TODO / Melhorias Futuras
 
+### Prioridade Alta
+
+- [ ] **Testar processos com dano moral e dano material separados**
+  - Alguns processos têm valores diferentes para dano moral e dano material
+  - Cada tipo pode ter data base e índice de correção diferentes
+  - **Caso de teste:** Lucrecia Aline Cabral Formigosa
+    - Arquivos de referência em: `/Users/luanbarbosa/Downloads/drive-download-20260128T025832Z-3-001/`
+      - `calculo dano materias atualizado.pdf`
+      - `calculo dano moral atualizado.pdf`
+      - `sentença - LUCRECIA ALINE CABRAL FORMIGOSA (.pdf`
+    - Cumprimento: `/Users/luanbarbosa/Downloads/Cumprimento de Sentença - Lucrecia Aline Cabral Formigosa.pdf`
+  - **Implementação necessária:**
+    - [ ] Adicionar campo "tipo de dano" por autor/valor (moral, material, lucros cessantes, etc.)
+    - [ ] Permitir datas base diferentes por tipo de dano
+    - [ ] Calcular correção separadamente para cada tipo
+    - [ ] Consolidar totais na memória de cálculo
+
+### Prioridade Média
+
 - [ ] Adicionar testes unitários
 - [ ] Implementar PWA para uso offline completo
 - [ ] Adicionar suporte a mais tribunais com regras específicas
 - [ ] Histórico de cálculos salvos localmente
+
+### Prioridade Baixa
+
 - [ ] Exportar para Excel
