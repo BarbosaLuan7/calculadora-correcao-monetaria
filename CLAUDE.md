@@ -2,7 +2,9 @@
 
 ## Visão Geral do Projeto
 
-Calculadora de correção monetária para cumprimento de sentença judicial. Calcula correção monetária (IPCA, INPC, IGP-M, etc.) e juros de mora a partir da data de citação.
+Calculadora de correção monetária para cumprimento de sentença judicial. Calcula correção monetária (IPCA, INPC, IGP-M, etc.) e juros de mora com suporte a dano moral e material separados.
+
+**URL de Produção:** https://barbosaluan7.github.io/calculadora-correcao-monetaria/
 
 ## Stack Tecnológica
 
@@ -10,33 +12,73 @@ Calculadora de correção monetária para cumprimento de sentença judicial. Cal
 - **Estilização:** Tailwind CSS 3 + shadcn/ui (Radix)
 - **APIs:** Banco Central do Brasil (índices), Anthropic Claude (extração de documentos)
 - **Documentos:** jsPDF (PDF), docx (DOCX)
+- **Deploy:** GitHub Pages + Cloudflare Workers (proxy API)
 
-## Estrutura de Arquivos Importantes
+## Arquitetura de Deploy
+
+```
+┌─────────────────────┐     ┌──────────────────────────────────────┐
+│   GitHub Pages      │     │   Cloudflare Worker                  │
+│   (Frontend)        │────▶│   calculadora-correcao-proxy         │
+│                     │     │   .garantedireito.workers.dev        │
+└─────────────────────┘     └──────────────────────────────────────┘
+                                          │
+                                          ▼
+                            ┌──────────────────────────────────────┐
+                            │   Anthropic API                      │
+                            │   api.anthropic.com                  │
+                            └──────────────────────────────────────┘
+```
+
+- **GitHub Pages:** Hospeda o frontend estático
+- **Cloudflare Worker:** Proxy seguro para API Anthropic (evita expor API key)
+- **GitHub Actions:** Deploy automático a cada push na main
+
+## Estrutura de Arquivos
 
 ```
 src/
-├── components/Calculator.tsx    # Componente principal - orquestra todo o fluxo
-├── components/DocumentUpload.tsx # Upload e extração de PDF via Claude
-├── components/AuthorList.tsx    # Gerenciamento de múltiplos autores
-├── components/ResultPanel.tsx   # Exibição de resultados e downloads
-├── services/bcb.ts              # Chamadas à API do Banco Central
-├── services/cache.ts            # Cache de índices no localStorage
-├── services/calculo.ts          # Lógica de cálculo de correção e juros
-├── services/extracao.ts         # Integração com Claude API
-├── services/pdf.ts              # Geração de memória de cálculo PDF
-├── services/docx.ts             # Geração de petição DOCX
-├── types/index.ts               # Interfaces e tipos TypeScript
-└── lib/utils.ts                 # Funções utilitárias (formatação, etc.)
+├── components/
+│   ├── Calculator.tsx       # Componente principal - orquestra todo o fluxo
+│   ├── DocumentUpload.tsx   # Upload e extração de PDF via Claude
+│   ├── AuthorList.tsx       # Gerenciamento de múltiplos autores
+│   └── ResultPanel.tsx      # Exibição de resultados e downloads
+├── services/
+│   ├── bcb.ts               # Chamadas à API do Banco Central
+│   ├── cache.ts             # Cache de índices no localStorage
+│   ├── calculo.ts           # Lógica de cálculo de correção e juros
+│   ├── extracao.ts          # Integração com Claude API
+│   ├── pdf.ts               # Geração de memória de cálculo PDF
+│   └── docx.ts              # Geração de petição DOCX
+├── types/index.ts           # Interfaces e tipos TypeScript
+└── lib/utils.ts             # Funções utilitárias
+
+worker/
+├── src/index.ts             # Cloudflare Worker (proxy Anthropic)
+├── wrangler.toml            # Configuração do Worker
+└── package.json
+
+.github/workflows/
+└── deploy.yml               # GitHub Actions para deploy automático
 ```
 
 ## Fluxo Principal
 
 1. Usuário faz upload de PDF da sentença (opcional)
-2. Claude extrai: autores, valores, tribunal, índice, juros
-3. Usuário revisa/completa dados (data de citação é obrigatória)
+2. Claude extrai: autores, valores, datas, tribunal, índice, juros
+3. Usuário revisa/completa dados
 4. Sistema busca índices na API BCB (com fallback para cache)
-5. Calcula correção monetária e juros
+5. Calcula correção monetária e juros separadamente para cada verba
 6. Gera memória de cálculo (PDF) e petição (DOCX)
+
+## Cálculo de Dano Moral e Material
+
+O sistema suporta cálculo separado conforme regras jurídicas:
+
+| Tipo de Dano | Correção Monetária | Juros de Mora |
+|--------------|-------------------|---------------|
+| **Material** | Desde ajuizamento | Desde citação |
+| **Moral**    | Desde sentença (Súmula 362 STJ) | Desde citação |
 
 ## Códigos das Séries BCB
 
@@ -48,26 +90,56 @@ src/
 | Selic | 11 |
 | TR | 226 |
 
-## Proxy para API Anthropic
+## Desenvolvimento Local
 
-A API da Anthropic não aceita chamadas diretas do browser (CORS). O Vite está configurado com proxy:
+### Pré-requisitos
 
-- Frontend chama: `/api/anthropic/v1/messages`
-- Proxy redireciona para: `https://api.anthropic.com/v1/messages`
-- Headers adicionados automaticamente: `x-api-key`, `anthropic-version`, `anthropic-dangerous-direct-browser-access`
+```bash
+npm install
+```
 
-## Variáveis de Ambiente
+### Variáveis de Ambiente
+
+Criar arquivo `.env`:
 
 ```env
 VITE_ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
 ```
 
-## Comandos Úteis
+### Comandos
 
 ```bash
-npm run dev      # Desenvolvimento
+npm run dev      # Desenvolvimento (localhost:5173)
 npm run build    # Build produção
 npm run lint     # Linting
+```
+
+### Proxy Local
+
+Em desenvolvimento, o Vite faz proxy para a API Anthropic:
+- Frontend chama: `/api/anthropic/v1/messages`
+- Proxy redireciona para: `https://api.anthropic.com/v1/messages`
+
+## Deploy
+
+### Deploy Automático
+
+Push na branch `main` dispara GitHub Actions que:
+1. Faz build do projeto
+2. Deploy no GitHub Pages
+
+### Deploy Manual do Worker
+
+```bash
+cd worker
+CLOUDFLARE_API_TOKEN="xxx" CLOUDFLARE_ACCOUNT_ID="xxx" npx wrangler deploy
+```
+
+### Secrets do Worker
+
+```bash
+# Configurar API key da Anthropic
+echo "sk-ant-xxx" | npx wrangler secret put ANTHROPIC_API_KEY
 ```
 
 ## Padrões de Código
@@ -80,28 +152,12 @@ npm run lint     # Linting
 
 ## Considerações de Segurança
 
-- API key nunca exposta no frontend (passa pelo proxy)
+- API key da Anthropic armazenada como secret no Cloudflare Worker
+- Frontend não tem acesso direto à API key
 - Cache local não contém dados sensíveis
 - Documentos gerados localmente (não enviados a servidor)
 
 ## TODO / Melhorias Futuras
-
-### Prioridade Alta
-
-- [ ] **Testar processos com dano moral e dano material separados**
-  - Alguns processos têm valores diferentes para dano moral e dano material
-  - Cada tipo pode ter data base e índice de correção diferentes
-  - **Caso de teste:** Lucrecia Aline Cabral Formigosa
-    - Arquivos de referência em: `/Users/luanbarbosa/Downloads/drive-download-20260128T025832Z-3-001/`
-      - `calculo dano materias atualizado.pdf`
-      - `calculo dano moral atualizado.pdf`
-      - `sentença - LUCRECIA ALINE CABRAL FORMIGOSA (.pdf`
-    - Cumprimento: `/Users/luanbarbosa/Downloads/Cumprimento de Sentença - Lucrecia Aline Cabral Formigosa.pdf`
-  - **Implementação necessária:**
-    - [ ] Adicionar campo "tipo de dano" por autor/valor (moral, material, lucros cessantes, etc.)
-    - [ ] Permitir datas base diferentes por tipo de dano
-    - [ ] Calcular correção separadamente para cada tipo
-    - [ ] Consolidar totais na memória de cálculo
 
 ### Prioridade Média
 
@@ -113,3 +169,4 @@ npm run lint     # Linting
 ### Prioridade Baixa
 
 - [ ] Exportar para Excel
+- [ ] Domínio customizado
