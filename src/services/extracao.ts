@@ -32,67 +32,126 @@ async function fileToBase64(file: File): Promise<string> {
 
 /**
  * Prompt para extração de dados da sentença
+ * Segue melhores práticas de engenharia de prompt da Anthropic
  */
-const PROMPT_EXTRACAO = `Você é um assistente jurídico especializado em análise de sentenças judiciais brasileiras.
+const PROMPT_EXTRACAO = `Você é um assistente jurídico especializado em análise de sentenças judiciais brasileiras para cálculo de cumprimento de sentença.
 
-Analise o documento anexo (sentença judicial) e extraia as seguintes informações no formato JSON:
+<task>
+Analise cuidadosamente o documento judicial anexo e extraia as informações necessárias para cálculo de correção monetária e juros de mora.
+</task>
 
+<output_format>
+Retorne APENAS um objeto JSON válido, sem texto adicional, comentários ou marcadores de código.
+
+Estrutura esperada:
 {
   "autores": [
     {
-      "nome": "Nome completo do autor",
-      "cpf": "CPF se disponível",
-      "valorPrincipal": 0, // Valor total único se não separar danos
-      "valorDanoMaterial": 0, // Valor do dano material se especificado separadamente
-      "valorDanoMoral": 0 // Valor do dano moral se especificado separadamente
+      "nome": "string",
+      "cpf": "string ou null",
+      "valorPrincipal": number,
+      "valorDanoMaterial": number,
+      "valorDanoMoral": number
     }
   ],
-  "dataAjuizamento": "DD/MM/YYYY", // Data de ajuizamento do processo
-  "dataSentenca": "DD/MM/YYYY", // Data da sentença
-  "dataCitacao": "DD/MM/YYYY", // Data da citação válida
-  "dataBase": "DD/MM/YYYY", // Data base genérica (fallback)
-  "indiceCorrecao": "IPCA" | "INPC" | "IGP-M" | "SELIC" | "TR",
-  "tipoJuros": "SELIC" | "1_PORCENTO" | "SELIC_MENOS_IPCA",
-  "tribunal": "Ex: TJSP, TJRJ, TRF1",
-  "numeroProcesso": "Número completo do processo",
-  "vara": "Nome da vara"
+  "dataAjuizamento": "DD/MM/YYYY ou null",
+  "dataSentenca": "DD/MM/YYYY ou null",
+  "dataCitacao": "DD/MM/YYYY ou null",
+  "dataBase": "DD/MM/YYYY ou null",
+  "indiceCorrecao": "IPCA | INPC | IGP-M | SELIC | TR | null",
+  "tipoJuros": "SELIC | 1_PORCENTO | SELIC_MENOS_IPCA | null",
+  "tribunal": "string ou null",
+  "numeroProcesso": "string ou null",
+  "vara": "string ou null"
 }
+</output_format>
 
-REGRAS DE EXTRAÇÃO:
+<extraction_rules>
 
-1. **Autores**: Identifique TODOS os autores/requerentes listados.
+<rule name="autores">
+Identifique TODOS os autores/requerentes/demandantes listados no processo.
+- Extraia o nome completo conforme aparece no documento
+- Se houver CPF mencionado, extraia no formato XXX.XXX.XXX-XX
+</rule>
 
-2. **VALORES - MUITO IMPORTANTE**:
-   - Se a sentença especifica valores SEPARADOS para dano moral e dano material, preencha "valorDanoMaterial" e "valorDanoMoral"
-   - Se há apenas um valor total, preencha "valorPrincipal"
-   - Exemplos de dano material: despesas médicas, lucros cessantes, prejuízos financeiros, passagens
-   - Exemplos de dano moral: indenização por sofrimento, abalo psicológico, constrangimento
-   - Converta "R$ 10.000,00" para 10000.00
+<rule name="valores" priority="critical">
+A sentença pode especificar valores de três formas:
 
-3. **DATAS DO PROCESSO - MUITO IMPORTANTE**:
-   - "dataAjuizamento": procure por "ajuizada em", "distribuída em", "proposta em", "data da distribuição"
-   - "dataSentenca": procure por "sentença proferida em", "julgado em", data no cabeçalho/rodapé da sentença
-   - "dataCitacao": procure por "citado em", "citação válida em", "AR juntado em"
-   - Estas datas são essenciais pois:
-     * Dano material: correção desde o ajuizamento
-     * Dano moral: correção desde a sentença (Súmula 362 STJ)
-     * Juros de mora: desde a citação
+1. **Valores SEPARADOS por tipo de dano:**
+   - Se encontrar dano material E dano moral especificados separadamente, preencha:
+     - "valorDanoMaterial": valor em reais (número decimal)
+     - "valorDanoMoral": valor em reais (número decimal)
+     - "valorPrincipal": 0
 
-4. **Índice de Correção**:
-   - "IPCA" - se mencionar IPCA, Índice de Preços ao Consumidor Amplo, ou "índice oficial"
-   - "INPC" - se mencionar INPC, Índice Nacional de Preços ao Consumidor
-   - "IGP-M" - se mencionar IGP-M ou Índice Geral de Preços do Mercado
-   - "SELIC" - se determinar correção pela Selic
-   - "TR" - se mencionar Taxa Referencial
+2. **Valor único total:**
+   - Se houver apenas um valor total de condenação, preencha:
+     - "valorPrincipal": valor em reais (número decimal)
+     - "valorDanoMaterial": 0
+     - "valorDanoMoral": 0
 
-5. **Juros de Mora**:
-   - "1_PORCENTO" - se mencionar 1% ao mês ou 12% ao ano
-   - "SELIC" - se determinar juros pela Selic
-   - "SELIC_MENOS_IPCA" - se mencionar "Selic menos IPCA" ou "juros reais"
+3. **Conversão de formato:**
+   - "R$ 10.000,00" → 10000.00
+   - "R$ 1.234,56" → 1234.56
+   - Sempre use ponto como separador decimal
 
-Se alguma informação não estiver disponível, deixe como null.
+Exemplos de dano material: despesas médicas, lucros cessantes, prejuízos patrimoniais, passagens, despesas com transporte, reparos.
+Exemplos de dano moral: indenização por sofrimento, abalo psicológico, constrangimento, dano extrapatrimonial.
+</rule>
 
-IMPORTANTE: Retorne APENAS o JSON, sem explicações adicionais.`
+<rule name="datas" priority="critical">
+As datas são essenciais para o cálculo correto. Procure atentamente:
+
+- **dataAjuizamento**: "ajuizada em", "distribuída em", "proposta em", "data da distribuição", "protocolo inicial"
+  → Usada para correção monetária do dano MATERIAL
+
+- **dataSentenca**: data de prolação da sentença, "julgado em", data no cabeçalho/rodapé, "proferida em", "sentenciado em"
+  → Usada para correção monetária do dano MORAL (Súmula 362 STJ)
+
+- **dataCitacao**: "citado em", "citação válida em", "AR juntado em", "citação por edital", "comparecimento espontâneo"
+  → Usada para início dos juros de mora
+
+- **dataBase**: qualquer outra data mencionada como base para cálculo (fallback)
+
+Formato: DD/MM/YYYY (ex: 15/03/2022)
+</rule>
+
+<rule name="indice_correcao">
+Identifique qual índice de correção monetária a sentença determina:
+
+- "IPCA" → IPCA, Índice de Preços ao Consumidor Amplo, "índice oficial", "índice do IBGE"
+- "INPC" → INPC, Índice Nacional de Preços ao Consumidor
+- "IGP-M" → IGP-M, Índice Geral de Preços do Mercado
+- "SELIC" → correção pela taxa Selic
+- "TR" → Taxa Referencial
+
+Se não especificado, deixe null.
+</rule>
+
+<rule name="juros_mora">
+Identifique qual taxa de juros de mora a sentença determina:
+
+- "1_PORCENTO" → 1% ao mês, 12% ao ano, juros legais do Código Civil
+- "SELIC" → juros pela taxa Selic
+- "SELIC_MENOS_IPCA" → "Selic menos IPCA", "juros reais", EC 113/2021
+
+Se não especificado, deixe null.
+</rule>
+
+<rule name="identificacao_processo">
+- **tribunal**: TJSP, TJRJ, TJMG, TRF1, TRF2, TRF3, TRF4, TRF5, TRT, etc.
+- **numeroProcesso**: número CNJ completo (NNNNNNN-NN.NNNN.N.NN.NNNN) ou formato antigo
+- **vara**: "1ª Vara Cível", "2ª Vara do Trabalho", "Juizado Especial Cível", etc.
+</rule>
+
+</extraction_rules>
+
+<important>
+- Leia o documento completo antes de extrair os dados
+- Se uma informação não estiver claramente presente, use null
+- Números devem ser tipo number, não string
+- Datas devem estar no formato DD/MM/YYYY
+- Retorne SOMENTE o JSON, nada mais
+</important>`
 
 /**
  * Extrai dados de uma sentença usando Claude API
@@ -135,8 +194,8 @@ export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> 
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
+      model: 'claude-opus-4-5-20251101',
+      max_tokens: 16384,
       messages
     })
   })
