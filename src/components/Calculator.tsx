@@ -1,34 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Loader2, RefreshCw, Calculator as CalculatorIcon } from 'lucide-react'
+import { Loader2, RefreshCw, Calculator as CalculatorIcon, Database, Clock } from 'lucide-react'
 import LogoLB from '@/assets/logo-lb.svg'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { DocumentUpload } from './DocumentUpload'
 import { AuthorList } from './AuthorList'
 import { ResultPanel } from './ResultPanel'
 import {
   type Autor,
-  type TipoIndice,
-  type TipoJuros,
-  type TipoMarcoJuros,
   type DadosExtraidos,
   type ResultadoCalculo,
-  NOMES_INDICES,
-  NOMES_JUROS,
-  NOMES_MARCO_JUROS,
-  FUNDAMENTOS_MARCO_JUROS
+  type BCBMetadata,
+  isNovoModo
 } from '@/types'
 import { calcularCorrecaoMultiplosAutores } from '@/services/calculo'
-import { verificarConexaoBCB } from '@/services/bcb'
+import { verificarConexaoBCB, getBCBMetadata, resetBCBMetadata } from '@/services/bcb'
 import { formatDateToBR } from '@/lib/utils'
 
 export function Calculator() {
@@ -37,15 +25,13 @@ export function Calculator() {
   const [tribunal, setTribunal] = useState('')
   const [vara, setVara] = useState('')
 
-  // Datas do processo
-  const [dataAjuizamento, setDataAjuizamento] = useState('') // Correção dano material
-  const [dataSentenca, setDataSentenca] = useState('') // Correção dano moral (Súmula 362 STJ)
-  const [dataCitacao, setDataCitacao] = useState('') // Juros de mora
+  // Datas do processo (usadas como fallback/padrão)
+  const [dataAjuizamento, setDataAjuizamento] = useState('')
+  const [dataSentenca, setDataSentenca] = useState('')
+  const [dataCitacao, setDataCitacao] = useState('')
+  const [dataEventoDanoso, setDataEventoDanoso] = useState('')
   const [dataCalculo, setDataCalculo] = useState(formatDateToBR(new Date()))
 
-  const [indiceCorrecao, setIndiceCorrecao] = useState<TipoIndice>('IPCA')
-  const [tipoJuros, setTipoJuros] = useState<TipoJuros>('1_PORCENTO')
-  const [marcoJuros, setMarcoJuros] = useState<TipoMarcoJuros>('CITACAO')
   const [autores, setAutores] = useState<Autor[]>([{
     id: 'autor-1',
     nome: '',
@@ -57,6 +43,7 @@ export function Calculator() {
   const [isCalculating, setIsCalculating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bcbOnline, setBcbOnline] = useState<boolean | null>(null)
+  const [bcbMetadata, setBcbMetadata] = useState<BCBMetadata | null>(null)
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false)
 
   // Verifica conexão com BCB e API key ao carregar
@@ -75,10 +62,8 @@ export function Calculator() {
     if (data.numeroProcesso) setNumeroProcesso(data.numeroProcesso)
     if (data.tribunal) setTribunal(data.tribunal)
     if (data.vara) setVara(data.vara)
-    if (data.indiceCorrecao) setIndiceCorrecao(data.indiceCorrecao)
-    if (data.tipoJuros) setTipoJuros(data.tipoJuros)
 
-    // Novas datas do processo
+    // Datas do processo
     if (data.dataAjuizamento) setDataAjuizamento(data.dataAjuizamento)
     if (data.dataSentenca) setDataSentenca(data.dataSentenca)
     if (data.dataCitacao) setDataCitacao(data.dataCitacao)
@@ -89,52 +74,83 @@ export function Calculator() {
 
   // Calcular correção
   const handleCalcular = async () => {
-    // Validações
-    if (!dataCitacao) {
-      setError(`Informe a ${NOMES_MARCO_JUROS[marcoJuros].toLowerCase()}`)
-      return
-    }
-
-    // Verifica se tem pelo menos um valor (principal, dano material ou dano moral)
+    // Verifica se tem pelo menos um autor com verba configurada
     const autoresValidos = autores.filter(a =>
+      isNovoModo(a) ||
       a.valorPrincipal > 0 ||
       (a.valorDanoMaterial ?? 0) > 0 ||
       (a.valorDanoMoral ?? 0) > 0
     )
+
     if (autoresValidos.length === 0) {
       setError('Informe pelo menos um autor com valor')
       return
     }
 
-    // Validação de datas para verbas separadas
-    const temDanoMaterial = autoresValidos.some(a => (a.valorDanoMaterial ?? 0) > 0)
-    const temDanoMoral = autoresValidos.some(a => (a.valorDanoMoral ?? 0) > 0)
+    // Validação para novo modo: cada verba deve ter datas configuradas
+    const errosValidacao: string[] = []
 
-    if (temDanoMaterial && !dataAjuizamento) {
-      setError('Informe a data de ajuizamento para correção do dano material')
-      return
+    for (const autor of autoresValidos) {
+      if (autor.danoMaterial) {
+        if (!autor.danoMaterial.dataInicioCorrecao) {
+          errosValidacao.push(`${autor.nome || 'Autor'}: Data de correção do dano material não informada`)
+        }
+        if (!autor.danoMaterial.dataInicioJuros) {
+          errosValidacao.push(`${autor.nome || 'Autor'}: Data de juros do dano material não informada`)
+        }
+        if (autor.danoMaterial.valor <= 0) {
+          errosValidacao.push(`${autor.nome || 'Autor'}: Valor do dano material deve ser maior que zero`)
+        }
+      }
+      if (autor.danoMoral) {
+        if (!autor.danoMoral.dataInicioCorrecao) {
+          errosValidacao.push(`${autor.nome || 'Autor'}: Data de correção do dano moral não informada`)
+        }
+        if (!autor.danoMoral.dataInicioJuros) {
+          errosValidacao.push(`${autor.nome || 'Autor'}: Data de juros do dano moral não informada`)
+        }
+        if (autor.danoMoral.valor <= 0) {
+          errosValidacao.push(`${autor.nome || 'Autor'}: Valor do dano moral deve ser maior que zero`)
+        }
+      }
     }
 
-    if (temDanoMoral && !dataSentenca) {
-      setError('Informe a data da sentença para correção do dano moral (Súmula 362 STJ)')
+    // Validação para modo legado
+    const usandoModoLegado = autoresValidos.some(a =>
+      !isNovoModo(a) && (a.valorPrincipal > 0 || (a.valorDanoMaterial ?? 0) > 0 || (a.valorDanoMoral ?? 0) > 0)
+    )
+
+    if (usandoModoLegado && !dataCitacao) {
+      errosValidacao.push('Data de citação não informada (necessária para modo legado)')
+    }
+
+    if (errosValidacao.length > 0) {
+      setError(errosValidacao.join('\n'))
       return
     }
 
     setError(null)
     setIsCalculating(true)
     setResultados([])
+    setBcbMetadata(null)
+
+    // Reseta metadados do BCB antes do cálculo
+    resetBCBMetadata()
 
     try {
       const results = await calcularCorrecaoMultiplosAutores(
         autoresValidos,
-        indiceCorrecao,
-        tipoJuros,
-        dataCitacao,
         dataCalculo,
+        // Parâmetros legados (fallback)
+        dataCitacao,
         dataAjuizamento || undefined,
         dataSentenca || undefined
       )
       setResultados(results)
+
+      // Captura metadados do BCB após o cálculo
+      const metadata = getBCBMetadata()
+      setBcbMetadata(metadata)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao calcular correção')
     } finally {
@@ -150,10 +166,8 @@ export function Calculator() {
     setDataAjuizamento('')
     setDataSentenca('')
     setDataCitacao('')
+    setDataEventoDanoso('')
     setDataCalculo(formatDateToBR(new Date()))
-    setIndiceCorrecao('IPCA')
-    setTipoJuros('1_PORCENTO')
-    setMarcoJuros('CITACAO')
     setAutores([{ id: 'autor-1', nome: '', valorPrincipal: 0 }])
     setResultados([])
     setError(null)
@@ -192,13 +206,36 @@ export function Calculator() {
               </p>
             </div>
 
-            {/* Status */}
+            {/* Status BCB */}
             {bcbOnline !== null && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
-                <span className={`w-2 h-2 rounded-full ${bcbOnline ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <span className="text-xs text-gray-500 font-medium">
-                  API Banco Central: {bcbOnline ? 'Online' : 'Offline'}
-                </span>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {/* Status Online/Offline */}
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
+                  <span className={`w-2 h-2 rounded-full ${bcbOnline ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                  <span className="text-xs text-gray-500 font-medium">
+                    API Banco Central: {bcbOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+
+                {/* Séries consultadas (após cálculo) */}
+                {bcbMetadata && bcbMetadata.seriesConsultadas.length > 0 && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
+                    <Database className="w-3.5 h-3.5 text-[#93784a]" />
+                    <span className="text-xs text-gray-500 font-medium">
+                      {bcbMetadata.seriesConsultadas.map(s => `Série ${s.codigo} (${s.tipo})`).join(', ')}
+                    </span>
+                  </div>
+                )}
+
+                {/* Última atualização (após cálculo) */}
+                {bcbMetadata && bcbMetadata.ultimaAtualizacao && (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
+                    <Clock className="w-3.5 h-3.5 text-[#93784a]" />
+                    <span className="text-xs text-gray-500 font-medium">
+                      Atualizado: {bcbMetadata.ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -256,11 +293,11 @@ export function Calculator() {
         <CardHeader>
           <CardTitle>Datas do Processo</CardTitle>
           <CardDescription>
-            Datas base para correção monetária e juros de mora
+            Datas padrão do processo (podem ser sobrescritas por verba)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="dataAjuizamento">Data de Ajuizamento</Label>
               <Input
@@ -270,7 +307,7 @@ export function Calculator() {
                 onChange={(e) => setDataAjuizamento(e.target.value)}
               />
               <p className="text-xs text-gray-400">
-                Correção monetária do dano material
+                Correção do dano material
               </p>
             </div>
             <div className="space-y-2">
@@ -282,37 +319,11 @@ export function Calculator() {
                 onChange={(e) => setDataSentenca(e.target.value)}
               />
               <p className="text-xs text-gray-400">
-                Correção monetária do dano moral (Súmula 362 STJ)
+                Correção do dano moral
               </p>
             </div>
-          </div>
-
-          {/* Marco inicial dos juros */}
-          <div className="space-y-2">
-            <Label htmlFor="marcoJuros">Marco Inicial dos Juros</Label>
-            <Select
-              value={marcoJuros}
-              onValueChange={(v) => setMarcoJuros(v as TipoMarcoJuros)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(NOMES_MARCO_JUROS).map(([key, nome]) => (
-                  <SelectItem key={key} value={key}>
-                    {nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-[#93784a]">
-              {FUNDAMENTOS_MARCO_JUROS[marcoJuros]}
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="dataCitacao">{NOMES_MARCO_JUROS[marcoJuros]} *</Label>
+              <Label htmlFor="dataCitacao">Data da Citação</Label>
               <Input
                 id="dataCitacao"
                 placeholder="DD/MM/AAAA"
@@ -320,77 +331,51 @@ export function Calculator() {
                 onChange={(e) => setDataCitacao(e.target.value)}
               />
               <p className="text-xs text-gray-400">
-                Início dos juros de mora (obrigatório)
+                Juros de mora (Art. 405 CC)
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dataCalculo">Data do Cálculo</Label>
+              <Label htmlFor="dataEventoDanoso">Data do Evento</Label>
               <Input
-                id="dataCalculo"
+                id="dataEventoDanoso"
                 placeholder="DD/MM/AAAA"
-                value={dataCalculo}
-                onChange={(e) => setDataCalculo(e.target.value)}
+                value={dataEventoDanoso}
+                onChange={(e) => setDataEventoDanoso(e.target.value)}
               />
               <p className="text-xs text-gray-400">
-                Data final do cálculo (geralmente hoje)
+                Súmula 54 STJ (extracontratual)
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Parâmetros de cálculo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Parâmetros de Cálculo</CardTitle>
-          <CardDescription>
-            Configure o índice de correção e tipo de juros
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="indiceCorrecao">Índice de Correção</Label>
-              <Select
-                value={indiceCorrecao}
-                onValueChange={(v) => setIndiceCorrecao(v as TipoIndice)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(NOMES_INDICES).map(([key, nome]) => (
-                    <SelectItem key={key} value={key}>
-                      {nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tipoJuros">Juros de Mora</Label>
-              <Select
-                value={tipoJuros}
-                onValueChange={(v) => setTipoJuros(v as TipoJuros)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(NOMES_JUROS).map(([key, nome]) => (
-                    <SelectItem key={key} value={key}>
-                      {nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="border-t pt-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="dataCalculo">Data do Cálculo *</Label>
+                <Input
+                  id="dataCalculo"
+                  placeholder="DD/MM/AAAA"
+                  value={dataCalculo}
+                  onChange={(e) => setDataCalculo(e.target.value)}
+                />
+                <p className="text-xs text-gray-400">
+                  Data final do cálculo (geralmente hoje)
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Lista de autores */}
-      <AuthorList autores={autores} onChange={setAutores} />
+      <AuthorList
+        autores={autores}
+        onChange={setAutores}
+        dataAjuizamento={dataAjuizamento}
+        dataSentenca={dataSentenca}
+        dataCitacao={dataCitacao}
+        dataEventoDanoso={dataEventoDanoso}
+      />
 
       {/* Botões de ação */}
       <div className="flex gap-4 pt-4">
@@ -426,7 +411,7 @@ export function Calculator() {
 
       {/* Erro */}
       {error && (
-        <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-200">
+        <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-200 whitespace-pre-line">
           {error}
         </div>
       )}
@@ -441,11 +426,9 @@ export function Calculator() {
           dataAjuizamento,
           dataSentenca,
           dataCitacao,
-          dataCalculo,
-          indiceCorrecao,
-          tipoJuros,
-          marcoJuros
+          dataCalculo
         }}
+        bcbMetadata={bcbMetadata}
       />
 
       </div>

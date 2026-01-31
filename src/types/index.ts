@@ -1,5 +1,17 @@
 export type TipoVerba = 'MATERIAL' | 'MORAL'
 
+/**
+ * Configuração independente para cada verba (dano material ou moral)
+ * Permite definir parâmetros diferentes de correção e juros para cada tipo de dano
+ */
+export interface ConfiguracaoVerba {
+  valor: number
+  dataInicioCorrecao: string      // DD/MM/YYYY - quando começa a correção monetária
+  indiceCorrecao: TipoIndice      // IPCA, INPC, IGP-M, SELIC, TR
+  dataInicioJuros: string         // DD/MM/YYYY - quando começam os juros de mora
+  tipoJuros: TipoJuros            // 1_PORCENTO, SELIC, SELIC_MENOS_IPCA
+}
+
 export interface ResultadoVerba {
   tipo: TipoVerba
   valorPrincipal: number
@@ -9,6 +21,13 @@ export interface ResultadoVerba {
   fatorCorrecao: number
   percentualJuros: number
   detalhamento: DetalheCalculo[]
+  // Parâmetros usados no cálculo (para exibição)
+  parametros?: {
+    dataInicioCorrecao: string
+    indiceCorrecao: TipoIndice
+    dataInicioJuros: string
+    tipoJuros: TipoJuros
+  }
 }
 
 export interface Autor {
@@ -16,12 +35,9 @@ export interface Autor {
   nome: string
   cpf?: string
 
-  // Campo legado (mantido para retrocompatibilidade)
-  valorPrincipal: number
-
-  // Valores separados por verba
-  valorDanoMaterial?: number
-  valorDanoMoral?: number
+  // NOVO: Verbas com configuração independente (4 campos cada)
+  danoMaterial?: ConfiguracaoVerba
+  danoMoral?: ConfiguracaoVerba
 
   // Resultados calculados por verba
   resultadoMaterial?: ResultadoVerba
@@ -31,6 +47,11 @@ export interface Autor {
   valorCorrigido?: number
   valorJuros?: number
   valorTotal?: number
+
+  // LEGADO: mantido para retrocompatibilidade
+  valorPrincipal: number
+  valorDanoMaterial?: number
+  valorDanoMoral?: number
 }
 
 export interface IndiceData {
@@ -102,6 +123,19 @@ export interface APIBCBResponse {
   valor: string
 }
 
+/**
+ * Metadados sobre a consulta ao BCB
+ */
+export interface BCBMetadata {
+  online: boolean
+  ultimaAtualizacao: Date | null
+  seriesConsultadas: {
+    tipo: TipoIndice
+    codigo: number
+    registros: number
+  }[]
+}
+
 export const CODIGOS_SERIES_BCB: Record<TipoIndice, number> = {
   'IPCA': 433,
   'INPC': 188,
@@ -134,4 +168,55 @@ export const FUNDAMENTOS_MARCO_JUROS: Record<TipoMarcoJuros, string> = {
   'CITACAO': 'Art. 405 CC - regra geral',
   'EVENTO_DANOSO': 'Súmula 54 STJ - responsabilidade extracontratual',
   'DESEMBOLSO': 'Data do efetivo prejuízo'
+}
+
+/**
+ * Presets de sentença para facilitar preenchimento
+ */
+export type TipoPresetSentenca = 'classica' | 'extracontratual' | 'personalizado'
+
+export interface PresetConfig {
+  label: string
+  descricao: string
+  material: {
+    indice: TipoIndice
+    juros: TipoJuros
+    marcoCorrecao: 'ajuizamento' | 'evento' | 'desembolso'
+    marcoJuros: 'citacao' | 'evento'
+  }
+  moral: {
+    indice: TipoIndice
+    juros: TipoJuros
+    marcoCorrecao: 'sentenca'
+    marcoJuros: 'citacao' | 'evento'
+  }
+}
+
+export const PRESETS_SENTENCA: Record<Exclude<TipoPresetSentenca, 'personalizado'>, PresetConfig> = {
+  'classica': {
+    label: 'Clássica (Art. 405 CC)',
+    descricao: 'IPCA + 1% a.m. desde citação',
+    material: { indice: 'IPCA', juros: '1_PORCENTO', marcoCorrecao: 'ajuizamento', marcoJuros: 'citacao' },
+    moral: { indice: 'IPCA', juros: '1_PORCENTO', marcoCorrecao: 'sentenca', marcoJuros: 'citacao' }
+  },
+  'extracontratual': {
+    label: 'Extracontratual (Súmula 54 STJ)',
+    descricao: 'Juros desde o evento danoso',
+    material: { indice: 'IPCA', juros: '1_PORCENTO', marcoCorrecao: 'evento', marcoJuros: 'evento' },
+    moral: { indice: 'IPCA', juros: '1_PORCENTO', marcoCorrecao: 'sentenca', marcoJuros: 'evento' }
+  }
+}
+
+/**
+ * Verifica se o autor usa o novo modo (ConfiguracaoVerba)
+ */
+export function isNovoModo(autor: Autor): boolean {
+  return !!(autor.danoMaterial || autor.danoMoral)
+}
+
+/**
+ * Verifica se o autor usa o modo legado (valorPrincipal)
+ */
+export function isModoLegado(autor: Autor): boolean {
+  return autor.valorPrincipal > 0 && !isNovoModo(autor)
 }

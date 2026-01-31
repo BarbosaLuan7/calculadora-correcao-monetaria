@@ -1,7 +1,7 @@
-import { Download, FileText, FileSpreadsheet } from 'lucide-react'
+import { Download, FileText, FileSpreadsheet, Database } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { type ResultadoCalculo, type TipoIndice, type TipoJuros, type TipoMarcoJuros, NOMES_INDICES, NOMES_JUROS, NOMES_MARCO_JUROS } from '@/types'
+import { type ResultadoCalculo, type ResultadoVerba, type BCBMetadata, NOMES_JUROS } from '@/types'
 import { formatCurrency, formatPercent } from '@/lib/utils'
 import { salvarMemoriaPDF } from '@/services/pdf'
 import { salvarPeticaoDOCX } from '@/services/docx'
@@ -16,13 +16,79 @@ interface ResultPanelProps {
     dataSentenca?: string
     dataCitacao: string
     dataCalculo: string
-    indiceCorrecao: TipoIndice
-    tipoJuros: TipoJuros
-    marcoJuros?: TipoMarcoJuros
   }
+  bcbMetadata?: BCBMetadata | null
 }
 
-export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
+// Exibe detalhes de uma verba com seus parâmetros
+function VerbaDetails({ verba, label }: { verba: ResultadoVerba; label: string }) {
+  const corFundo = verba.tipo === 'MATERIAL' ? 'bg-blue-50/50' : 'bg-purple-50/50'
+  const corBorda = verba.tipo === 'MATERIAL' ? 'border-blue-200' : 'border-purple-200'
+  const corTexto = verba.tipo === 'MATERIAL' ? 'text-blue-700' : 'text-purple-700'
+
+  return (
+    <div className={`p-4 rounded-lg border ${corBorda} ${corFundo}`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className={`font-medium ${corTexto}`}>{label}</span>
+        <span className="text-lg font-semibold">{formatCurrency(verba.valorTotal)}</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <span className="text-muted-foreground">Principal:</span>
+          <span className="ml-2">{formatCurrency(verba.valorPrincipal)}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Corrigido:</span>
+          <span className="ml-2">{formatCurrency(verba.valorCorrigido)}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Fator:</span>
+          <span className="ml-2">{verba.fatorCorrecao.toFixed(6)}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Juros:</span>
+          <span className="ml-2">{formatCurrency(verba.valorJuros)}</span>
+          <span className="text-xs text-muted-foreground ml-1">
+            ({formatPercent(verba.percentualJuros * 100)})
+          </span>
+        </div>
+      </div>
+
+      {/* Parâmetros usados no cálculo */}
+      {verba.parametros && (
+        <div className="mt-3 pt-3 border-t border-dashed grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+          <div>
+            <span>Correção desde:</span>
+            <span className="ml-1 font-medium text-foreground">
+              {verba.parametros.dataInicioCorrecao}
+            </span>
+          </div>
+          <div>
+            <span>Índice:</span>
+            <span className="ml-1 font-medium text-foreground">
+              {verba.parametros.indiceCorrecao}
+            </span>
+          </div>
+          <div>
+            <span>Juros desde:</span>
+            <span className="ml-1 font-medium text-foreground">
+              {verba.parametros.dataInicioJuros}
+            </span>
+          </div>
+          <div>
+            <span>Tipo:</span>
+            <span className="ml-1 font-medium text-foreground">
+              {NOMES_JUROS[verba.parametros.tipoJuros]}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ResultPanel({ resultados, dadosProcesso, bcbMetadata }: ResultPanelProps) {
   const totais = {
     principal: resultados.reduce((sum, r) => sum + r.valorPrincipal, 0),
     corrigido: resultados.reduce((sum, r) => sum + r.valorCorrigido, 0),
@@ -37,7 +103,8 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
   const handleDownloadPDF = () => {
     salvarMemoriaPDF({
       ...dadosProcesso,
-      resultados
+      resultados,
+      bcbMetadata: bcbMetadata || undefined
     })
   }
 
@@ -60,133 +127,85 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
           Resultado do Cálculo
         </CardTitle>
         <CardDescription>
-          Correção: {NOMES_INDICES[dadosProcesso.indiceCorrecao]} | Juros: {NOMES_JUROS[dadosProcesso.tipoJuros]}
-          {dadosProcesso.marcoJuros && ` (desde ${NOMES_MARCO_JUROS[dadosProcesso.marcoJuros].toLowerCase()})`}
+          {temVerbasSeparadas
+            ? 'Cálculo com parâmetros independentes por verba'
+            : 'Cálculo com parâmetros globais'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Tabela de resultados por autor */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 px-3 font-medium">Autor</th>
-                {temVerbasSeparadas ? (
-                  <>
-                    <th className="text-right py-2 px-3 font-medium">D. Material</th>
-                    <th className="text-right py-2 px-3 font-medium">D. Moral</th>
-                  </>
-                ) : (
-                  <>
-                    <th className="text-right py-2 px-3 font-medium">Principal</th>
-                    <th className="text-right py-2 px-3 font-medium">Corrigido</th>
-                    <th className="text-right py-2 px-3 font-medium">Juros</th>
-                  </>
+        {/* Resultados por autor com detalhes das verbas */}
+        {resultados.map((r) => (
+          <div key={r.autor.id} className="border rounded-xl p-4 space-y-4">
+            {/* Cabeçalho do autor */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">{r.autor.nome || 'Sem nome'}</div>
+                {r.autor.cpf && (
+                  <div className="text-xs text-muted-foreground">{r.autor.cpf}</div>
                 )}
-                <th className="text-right py-2 px-3 font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {resultados.map((r) => (
-                <tr key={r.autor.id} className="border-b">
-                  <td className="py-2 px-3">
-                    <div>
-                      <div className="font-medium">{r.autor.nome || 'Sem nome'}</div>
-                      {r.autor.cpf && (
-                        <div className="text-xs text-muted-foreground">{r.autor.cpf}</div>
-                      )}
-                    </div>
-                  </td>
-                  {temVerbasSeparadas ? (
-                    <>
-                      <td className="text-right py-2 px-3">
-                        {r.resultadoMaterial ? (
-                          <div>
-                            <div>{formatCurrency(r.resultadoMaterial.valorTotal)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              principal: {formatCurrency(r.resultadoMaterial.valorPrincipal)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        {r.resultadoMoral ? (
-                          <div>
-                            <div>{formatCurrency(r.resultadoMoral.valorTotal)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              principal: {formatCurrency(r.resultadoMoral.valorPrincipal)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="text-right py-2 px-3">{formatCurrency(r.valorPrincipal)}</td>
-                      <td className="text-right py-2 px-3">
-                        <div>{formatCurrency(r.valorCorrigido)}</div>
-                        <div className="text-xs text-muted-foreground">
-                          fator: {r.fatorCorrecao.toFixed(6)}
-                        </div>
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        <div>{formatCurrency(r.valorJuros)}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatPercent(r.percentualJuros * 100)}
-                        </div>
-                      </td>
-                    </>
-                  )}
-                  <td className="text-right py-2 px-3 font-medium">{formatCurrency(r.valorTotal)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {resultados.length > 1 && (
-              <tfoot>
-                <tr className="bg-muted/50 font-medium">
-                  <td className="py-2 px-3">TOTAL</td>
-                  {temVerbasSeparadas ? (
-                    <>
-                      <td className="text-right py-2 px-3">{formatCurrency(totais.material)}</td>
-                      <td className="text-right py-2 px-3">{formatCurrency(totais.moral)}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="text-right py-2 px-3">{formatCurrency(totais.principal)}</td>
-                      <td className="text-right py-2 px-3">{formatCurrency(totais.corrigido)}</td>
-                      <td className="text-right py-2 px-3">{formatCurrency(totais.juros)}</td>
-                    </>
-                  )}
-                  <td className="text-right py-2 px-3">{formatCurrency(totais.total)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">Total</div>
+                <div className="text-xl font-bold text-[#93784a]">
+                  {formatCurrency(r.valorTotal)}
+                </div>
+              </div>
+            </div>
 
-        {/* Resumo das verbas quando tem separação */}
-        {temVerbasSeparadas && (
-          <div className="grid gap-3 sm:grid-cols-2">
+            {/* Detalhes das verbas */}
+            {(r.resultadoMaterial || r.resultadoMoral) ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {r.resultadoMaterial && (
+                  <VerbaDetails verba={r.resultadoMaterial} label="Dano Material" />
+                )}
+                {r.resultadoMoral && (
+                  <VerbaDetails verba={r.resultadoMoral} label="Dano Moral" />
+                )}
+              </div>
+            ) : (
+              /* Modo legado: exibe valores consolidados */
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-muted-foreground">Principal</div>
+                  <div className="font-medium">{formatCurrency(r.valorPrincipal)}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Corrigido</div>
+                  <div className="font-medium">{formatCurrency(r.valorCorrigido)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    fator: {r.fatorCorrecao.toFixed(6)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Juros</div>
+                  <div className="font-medium">{formatCurrency(r.valorJuros)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatPercent(r.percentualJuros * 100)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Total</div>
+                  <div className="font-medium">{formatCurrency(r.valorTotal)}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Totais por verba quando tem separação */}
+        {temVerbasSeparadas && resultados.length > 1 && (
+          <div className="grid gap-4 sm:grid-cols-2">
             {totais.material > 0 && (
-              <div className="p-3 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground">Dano Material (total)</p>
-                <p className="text-lg font-semibold">{formatCurrency(totais.material)}</p>
-                <p className="text-xs text-muted-foreground">
-                  Correção desde {dadosProcesso.dataAjuizamento || dadosProcesso.dataCitacao}
-                </p>
+              <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-700 font-medium">Dano Material (total)</p>
+                <p className="text-2xl font-bold">{formatCurrency(totais.material)}</p>
               </div>
             )}
             {totais.moral > 0 && (
-              <div className="p-3 bg-muted/30 rounded-lg">
-                <p className="text-sm text-muted-foreground">Dano Moral (total)</p>
-                <p className="text-lg font-semibold">{formatCurrency(totais.moral)}</p>
-                <p className="text-xs text-muted-foreground">
-                  Correção desde {dadosProcesso.dataSentenca || dadosProcesso.dataCitacao} (Súmula 362 STJ)
-                </p>
+              <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-lg">
+                <p className="text-sm text-purple-700 font-medium">Dano Moral (total)</p>
+                <p className="text-2xl font-bold">{formatCurrency(totais.moral)}</p>
               </div>
             )}
           </div>
@@ -199,6 +218,22 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
             <p className="text-4xl sm:text-5xl font-bold text-[#93784a] tracking-tight">{formatCurrency(totais.total)}</p>
           </div>
         </div>
+
+        {/* Fonte dos dados BCB */}
+        {bcbMetadata && bcbMetadata.seriesConsultadas.length > 0 && (
+          <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-emerald-50 border border-emerald-200">
+            <Database className="w-4 h-4 text-emerald-600" />
+            <span className="text-sm text-emerald-700">
+              <span className="font-medium">Fonte:</span> Banco Central do Brasil (SGS) —{' '}
+              {bcbMetadata.seriesConsultadas.map(s => `Série ${s.codigo} (${s.tipo})`).join(', ')}
+              {bcbMetadata.ultimaAtualizacao && (
+                <span className="text-emerald-600">
+                  {' '}— Consultado às {bcbMetadata.ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </span>
+          </div>
+        )}
 
         {/* Botões de download */}
         <div className="flex flex-col sm:flex-row gap-4">

@@ -12,7 +12,7 @@ import {
   Packer
 } from 'docx'
 import { saveAs } from 'file-saver'
-import { type ResultadoCalculo, NOMES_INDICES, NOMES_JUROS, NOMES_MARCO_JUROS, type TipoIndice, type TipoJuros, type TipoMarcoJuros } from '@/types'
+import { type ResultadoCalculo, type ResultadoVerba, NOMES_INDICES, NOMES_JUROS } from '@/types'
 import { formatCurrency, formatDateToBR } from '@/lib/utils'
 
 interface DadosPeticao {
@@ -21,12 +21,21 @@ interface DadosPeticao {
   vara: string
   dataCitacao: string
   dataCalculo: string
-  indiceCorrecao: TipoIndice
-  tipoJuros: TipoJuros
-  marcoJuros?: TipoMarcoJuros
   resultados: ResultadoCalculo[]
   nomeAdvogado?: string
   oabAdvogado?: string
+}
+
+/**
+ * Gera descrição dos parâmetros de uma verba
+ */
+function descreverParametrosVerba(verba: ResultadoVerba): string {
+  if (!verba.parametros) return ''
+
+  const indice = NOMES_INDICES[verba.parametros.indiceCorrecao] || verba.parametros.indiceCorrecao
+  const juros = NOMES_JUROS[verba.parametros.tipoJuros] || verba.parametros.tipoJuros
+
+  return `(correção pelo ${indice} desde ${verba.parametros.dataInicioCorrecao}, juros de ${juros} desde ${verba.parametros.dataInicioJuros})`
 }
 
 /**
@@ -35,7 +44,54 @@ interface DadosPeticao {
 export function gerarPeticaoDOCX(dados: DadosPeticao): Document {
   const totalGeral = dados.resultados.reduce((sum, r) => sum + r.valorTotal, 0)
   const listaAutores = dados.resultados.map(r => r.autor.nome).join(', ')
-  const labelMarcoJuros = dados.marcoJuros ? NOMES_MARCO_JUROS[dados.marcoJuros].toLowerCase() : 'citação'
+
+  // Verifica se tem verbas separadas
+  const temVerbasSeparadas = dados.resultados.some(r => r.resultadoMaterial || r.resultadoMoral)
+
+  // Gera descrição dos parâmetros de cálculo
+  const paragrafosCalculo: Paragraph[] = []
+
+  if (temVerbasSeparadas) {
+    // Descreve cada verba com seus parâmetros
+    for (const resultado of dados.resultados) {
+      if (resultado.resultadoMaterial) {
+        paragrafosCalculo.push(
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            children: [
+              new TextRun({
+                text: `- Dano Material de ${resultado.autor.nome}: ${formatCurrency(resultado.resultadoMaterial.valorPrincipal)} (principal) → ${formatCurrency(resultado.resultadoMaterial.valorTotal)} (atualizado) `,
+                size: 24
+              }),
+              new TextRun({
+                text: descreverParametrosVerba(resultado.resultadoMaterial),
+                size: 22,
+                italics: true
+              })
+            ]
+          })
+        )
+      }
+      if (resultado.resultadoMoral) {
+        paragrafosCalculo.push(
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            children: [
+              new TextRun({
+                text: `- Dano Moral de ${resultado.autor.nome}: ${formatCurrency(resultado.resultadoMoral.valorPrincipal)} (principal) → ${formatCurrency(resultado.resultadoMoral.valorTotal)} (atualizado) `,
+                size: 24
+              }),
+              new TextRun({
+                text: descreverParametrosVerba(resultado.resultadoMoral),
+                size: 22,
+                italics: true
+              })
+            ]
+          })
+        )
+      }
+    }
+  }
 
   const doc = new Document({
     sections: [{
@@ -158,7 +214,9 @@ export function gerarPeticaoDOCX(dados: DadosPeticao): Document {
           alignment: AlignmentType.JUSTIFIED,
           children: [
             new TextRun({
-              text: `A sentença proferida nestes autos determinou o pagamento de valores ao(s) exequente(s), devidamente corrigidos monetariamente pelo ${NOMES_INDICES[dados.indiceCorrecao]} desde a data base, acrescidos de juros de mora de ${NOMES_JUROS[dados.tipoJuros]} a partir da ${labelMarcoJuros} (${dados.dataCitacao}).`,
+              text: temVerbasSeparadas
+                ? 'A sentença proferida nestes autos determinou o pagamento de verbas indenizatórias ao(s) exequente(s), devidamente corrigidas monetariamente e acrescidas de juros de mora conforme parâmetros específicos para cada verba, detalhados a seguir.'
+                : `A sentença proferida nestes autos determinou o pagamento de valores ao(s) exequente(s), devidamente corrigidos monetariamente e acrescidos de juros de mora a partir da citação (${dados.dataCitacao}).`,
               size: 24
             })
           ]
@@ -197,6 +255,12 @@ export function gerarPeticaoDOCX(dados: DadosPeticao): Document {
             })
           ]
         }),
+
+        // Espaço
+        new Paragraph({ text: '' }),
+
+        // Detalhamento das verbas (se houver)
+        ...paragrafosCalculo,
 
         // Espaço
         new Paragraph({ text: '' }),
@@ -356,49 +420,96 @@ export function gerarPeticaoDOCX(dados: DadosPeticao): Document {
  */
 function criarTabelaValores(resultados: ResultadoCalculo[]): Table {
   const rows: TableRow[] = []
+  const temVerbasSeparadas = resultados.some(r => r.resultadoMaterial || r.resultadoMoral)
 
-  // Cabeçalho
-  rows.push(
-    new TableRow({
-      children: [
-        criarCelulaCabecalho('Autor'),
-        criarCelulaCabecalho('Principal'),
-        criarCelulaCabecalho('Corrigido'),
-        criarCelulaCabecalho('Juros'),
-        criarCelulaCabecalho('Total')
-      ]
-    })
-  )
-
-  // Dados
-  for (const resultado of resultados) {
+  if (temVerbasSeparadas) {
+    // Cabeçalho para verbas separadas
     rows.push(
       new TableRow({
         children: [
-          criarCelula(resultado.autor.nome),
-          criarCelula(formatCurrency(resultado.valorPrincipal)),
-          criarCelula(formatCurrency(resultado.valorCorrigido)),
-          criarCelula(formatCurrency(resultado.valorJuros)),
-          criarCelula(formatCurrency(resultado.valorTotal))
+          criarCelulaCabecalho('Autor'),
+          criarCelulaCabecalho('Dano Material'),
+          criarCelulaCabecalho('Dano Moral'),
+          criarCelulaCabecalho('Total')
         ]
       })
     )
-  }
 
-  // Total
-  if (resultados.length > 1) {
-    const total = resultados.reduce((sum, r) => sum + r.valorTotal, 0)
+    // Dados
+    for (const resultado of resultados) {
+      rows.push(
+        new TableRow({
+          children: [
+            criarCelula(resultado.autor.nome),
+            criarCelula(resultado.resultadoMaterial ? formatCurrency(resultado.resultadoMaterial.valorTotal) : '-'),
+            criarCelula(resultado.resultadoMoral ? formatCurrency(resultado.resultadoMoral.valorTotal) : '-'),
+            criarCelula(formatCurrency(resultado.valorTotal))
+          ]
+        })
+      )
+    }
+
+    // Total
+    if (resultados.length > 1) {
+      const totalMaterial = resultados.reduce((sum, r) => sum + (r.resultadoMaterial?.valorTotal ?? 0), 0)
+      const totalMoral = resultados.reduce((sum, r) => sum + (r.resultadoMoral?.valorTotal ?? 0), 0)
+      const total = resultados.reduce((sum, r) => sum + r.valorTotal, 0)
+
+      rows.push(
+        new TableRow({
+          children: [
+            criarCelulaCabecalho('TOTAL'),
+            criarCelulaCabecalho(totalMaterial > 0 ? formatCurrency(totalMaterial) : '-'),
+            criarCelulaCabecalho(totalMoral > 0 ? formatCurrency(totalMoral) : '-'),
+            criarCelulaCabecalho(formatCurrency(total))
+          ]
+        })
+      )
+    }
+  } else {
+    // Cabeçalho padrão
     rows.push(
       new TableRow({
         children: [
-          criarCelulaCabecalho('TOTAL'),
-          criarCelula(''),
-          criarCelula(''),
-          criarCelula(''),
-          criarCelulaCabecalho(formatCurrency(total))
+          criarCelulaCabecalho('Autor'),
+          criarCelulaCabecalho('Principal'),
+          criarCelulaCabecalho('Corrigido'),
+          criarCelulaCabecalho('Juros'),
+          criarCelulaCabecalho('Total')
         ]
       })
     )
+
+    // Dados
+    for (const resultado of resultados) {
+      rows.push(
+        new TableRow({
+          children: [
+            criarCelula(resultado.autor.nome),
+            criarCelula(formatCurrency(resultado.valorPrincipal)),
+            criarCelula(formatCurrency(resultado.valorCorrigido)),
+            criarCelula(formatCurrency(resultado.valorJuros)),
+            criarCelula(formatCurrency(resultado.valorTotal))
+          ]
+        })
+      )
+    }
+
+    // Total
+    if (resultados.length > 1) {
+      const total = resultados.reduce((sum, r) => sum + r.valorTotal, 0)
+      rows.push(
+        new TableRow({
+          children: [
+            criarCelulaCabecalho('TOTAL'),
+            criarCelula(''),
+            criarCelula(''),
+            criarCelula(''),
+            criarCelulaCabecalho(formatCurrency(total))
+          ]
+        })
+      )
+    }
   }
 
   return new Table({

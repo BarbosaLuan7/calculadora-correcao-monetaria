@@ -9,9 +9,49 @@
  * @module services/bcb
  */
 
-import { type TipoIndice, type IndiceData, CODIGOS_SERIES_BCB, type APIBCBResponse } from '@/types'
+import { type TipoIndice, type IndiceData, type BCBMetadata, CODIGOS_SERIES_BCB, type APIBCBResponse } from '@/types'
 
 const API_BASE = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs'
+
+// Estado global para rastrear metadados das consultas
+let bcbMetadata: BCBMetadata = {
+  online: false,
+  ultimaAtualizacao: null,
+  seriesConsultadas: []
+}
+
+/**
+ * Retorna os metadados atuais das consultas ao BCB
+ */
+export function getBCBMetadata(): BCBMetadata {
+  return { ...bcbMetadata }
+}
+
+/**
+ * Reseta os metadados (chamado antes de novo cálculo)
+ */
+export function resetBCBMetadata(): void {
+  bcbMetadata = {
+    online: false,
+    ultimaAtualizacao: null,
+    seriesConsultadas: []
+  }
+}
+
+/**
+ * Registra uma consulta de série nos metadados
+ */
+function registrarConsulta(tipo: TipoIndice, codigo: number, registros: number): void {
+  // Verifica se já existe essa série
+  const existente = bcbMetadata.seriesConsultadas.find(s => s.tipo === tipo)
+  if (existente) {
+    existente.registros = Math.max(existente.registros, registros)
+  } else {
+    bcbMetadata.seriesConsultadas.push({ tipo, codigo, registros })
+  }
+  bcbMetadata.online = true
+  bcbMetadata.ultimaAtualizacao = new Date()
+}
 
 /**
  * Busca dados de uma série do BCB
@@ -78,9 +118,10 @@ export async function buscarIndice(
   // BCB limita a 10 anos por consulta, dividir se necessário
   const diffYears = (dataFinal.getFullYear() - dataInicial.getFullYear())
 
+  let resultados: IndiceData[] = []
+
   if (diffYears > 10) {
     // Divide em múltiplas consultas
-    const resultados: IndiceData[] = []
     let currentStart = new Date(dataInicial)
 
     while (currentStart < dataFinal) {
@@ -105,20 +146,23 @@ export async function buscarIndice(
       currentStart = new Date(currentEnd)
       currentStart.setMonth(currentStart.getMonth() + 1)
     }
+  } else {
+    const dados = await fetchSerie(
+      codigo,
+      formatDate(dataInicial),
+      formatDate(dataFinal)
+    )
 
-    return resultados
+    resultados = dados.map(d => ({
+      data: d.data,
+      valor: parseFloat(d.valor)
+    }))
   }
 
-  const dados = await fetchSerie(
-    codigo,
-    formatDate(dataInicial),
-    formatDate(dataFinal)
-  )
+  // Registra nos metadados
+  registrarConsulta(tipo, codigo, resultados.length)
 
-  return dados.map(d => ({
-    data: d.data,
-    valor: parseFloat(d.valor)
-  }))
+  return resultados
 }
 
 /**
@@ -131,10 +175,15 @@ export async function buscarUltimosIndices(
   const codigo = CODIGOS_SERIES_BCB[tipo]
   const dados = await fetchUltimos(codigo, quantidade)
 
-  return dados.map(d => ({
+  const resultados = dados.map(d => ({
     data: d.data,
     valor: parseFloat(d.valor)
   }))
+
+  // Registra nos metadados
+  registrarConsulta(tipo, codigo, resultados.length)
+
+  return resultados
 }
 
 /**
@@ -143,8 +192,11 @@ export async function buscarUltimosIndices(
 export async function verificarConexaoBCB(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE}.433/dados/ultimos/1?formato=json`)
-    return response.ok
+    const online = response.ok
+    bcbMetadata.online = online
+    return online
   } catch {
+    bcbMetadata.online = false
     return false
   }
 }

@@ -1,4 +1,4 @@
-import { type DadosExtraidos, type Autor, type TipoIndice, type TipoJuros } from '@/types'
+import { type DadosExtraidos, type Autor, type ConfiguracaoVerba, type TipoIndice, type TipoJuros } from '@/types'
 import { normalizeDateBR } from '@/lib/utils'
 
 const CLAUDE_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || ''
@@ -33,12 +33,18 @@ async function fileToBase64(file: File): Promise<string> {
 
 /**
  * Prompt para extração de dados da sentença
- * Segue melhores práticas de engenharia de prompt da Anthropic
+ * Atualizado para extrair 4 parâmetros independentes por verba
  */
 const PROMPT_EXTRACAO = `Você é um assistente jurídico especializado em análise de sentenças judiciais brasileiras para cálculo de cumprimento de sentença.
 
 <task>
 Analise cuidadosamente o documento judicial anexo e extraia as informações necessárias para cálculo de correção monetária e juros de mora.
+
+IMPORTANTE: O sistema suporta parâmetros INDEPENDENTES para cada verba (dano material e dano moral). Cada verba pode ter:
+- Data diferente de início da correção monetária
+- Índice de correção diferente
+- Data diferente de início dos juros de mora
+- Tipo de juros diferente
 </task>
 
 <output_format>
@@ -50,17 +56,27 @@ Estrutura esperada:
     {
       "nome": "string",
       "cpf": "string ou null",
-      "valorPrincipal": number,
-      "valorDanoMaterial": number,
-      "valorDanoMoral": number
+      "danoMaterial": {
+        "valor": number,
+        "dataInicioCorrecao": "DD/MM/YYYY",
+        "indiceCorrecao": "IPCA | INPC | IGP-M | SELIC | TR",
+        "dataInicioJuros": "DD/MM/YYYY",
+        "tipoJuros": "SELIC | 1_PORCENTO | SELIC_MENOS_IPCA"
+      } ou null,
+      "danoMoral": {
+        "valor": number,
+        "dataInicioCorrecao": "DD/MM/YYYY",
+        "indiceCorrecao": "IPCA | INPC | IGP-M | SELIC | TR",
+        "dataInicioJuros": "DD/MM/YYYY",
+        "tipoJuros": "SELIC | 1_PORCENTO | SELIC_MENOS_IPCA"
+      } ou null,
+      "valorPrincipal": number
     }
   ],
   "dataAjuizamento": "DD/MM/YYYY ou null",
   "dataSentenca": "DD/MM/YYYY ou null",
   "dataCitacao": "DD/MM/YYYY ou null",
-  "dataBase": "DD/MM/YYYY ou null",
-  "indiceCorrecao": "IPCA | INPC | IGP-M | SELIC | TR | null",
-  "tipoJuros": "SELIC | 1_PORCENTO | SELIC_MENOS_IPCA | null",
+  "dataEventoDanoso": "DD/MM/YYYY ou null",
   "tribunal": "string ou null",
   "numeroProcesso": "string ou null",
   "vara": "string ou null"
@@ -75,67 +91,92 @@ Identifique TODOS os autores/requerentes/demandantes listados no processo.
 - Se houver CPF mencionado, extraia no formato XXX.XXX.XXX-XX
 </rule>
 
-<rule name="valores" priority="critical">
-A sentença pode especificar valores de três formas:
+<rule name="verbas" priority="critical">
+Para CADA verba (dano material e dano moral), extraia os 4 parâmetros independentes:
 
-1. **Valores SEPARADOS por tipo de dano:**
-   - Se encontrar dano material E dano moral especificados separadamente, preencha:
-     - "valorDanoMaterial": valor em reais (número decimal)
-     - "valorDanoMoral": valor em reais (número decimal)
-     - "valorPrincipal": 0
+1. **DANO MATERIAL** (se houver):
+   - "valor": valor em reais (número decimal)
+   - "dataInicioCorrecao": data de início da correção monetária
+     → Procure: "desde o ajuizamento", "desde a data do desembolso", "desde o efetivo prejuízo", "desde o evento"
+     → Se não especificado, use a data de ajuizamento
+   - "indiceCorrecao": índice de correção monetária
+     → IPCA, INPC, IGP-M, SELIC ou TR
+   - "dataInicioJuros": data de início dos juros de mora
+     → Regra geral: citação (Art. 405 CC)
+     → Exceção extracontratual: evento danoso (Súmula 54 STJ)
+   - "tipoJuros": tipo de juros de mora
+     → "1_PORCENTO" (1% a.m.), "SELIC", ou "SELIC_MENOS_IPCA"
 
-2. **Valor único total:**
-   - Se houver apenas um valor total de condenação, preencha:
-     - "valorPrincipal": valor em reais (número decimal)
-     - "valorDanoMaterial": 0
-     - "valorDanoMoral": 0
+2. **DANO MORAL** (se houver):
+   - "valor": valor em reais (número decimal)
+   - "dataInicioCorrecao": data de início da correção monetária
+     → IMPORTANTE: Súmula 362 STJ determina correção desde a data do ARBITRAMENTO (sentença)
+     → Procure: "desde a sentença", "desde o arbitramento", "desta data"
+     → Se não especificado, use a data da sentença
+   - "indiceCorrecao": índice de correção monetária
+   - "dataInicioJuros": data de início dos juros de mora
+     → Mesma lógica do dano material (citação ou evento)
+   - "tipoJuros": tipo de juros de mora
 
-3. **Conversão de formato:**
-   - "R$ 10.000,00" → 10000.00
-   - "R$ 1.234,56" → 1234.56
-   - Sempre use ponto como separador decimal
+Exemplos de sentenças e como extrair:
 
-Exemplos de dano material: despesas médicas, lucros cessantes, prejuízos patrimoniais, passagens, despesas com transporte, reparos.
-Exemplos de dano moral: indenização por sofrimento, abalo psicológico, constrangimento, dano extrapatrimonial.
+EXEMPLO 1 - Sentença Clássica:
+"Condeno ao pagamento de R$ 10.000,00 a título de danos materiais e R$ 5.000,00 de danos morais,
+ambos corrigidos pelo IPCA desde o ajuizamento (material) e sentença (moral),
+com juros de 1% ao mês desde a citação."
+→ danoMaterial: { valor: 10000, dataInicioCorrecao: [ajuizamento], indiceCorrecao: "IPCA", dataInicioJuros: [citação], tipoJuros: "1_PORCENTO" }
+→ danoMoral: { valor: 5000, dataInicioCorrecao: [sentença], indiceCorrecao: "IPCA", dataInicioJuros: [citação], tipoJuros: "1_PORCENTO" }
+
+EXEMPLO 2 - Responsabilidade Extracontratual:
+"Condeno em R$ 20.000,00 de danos morais, corrigidos desde esta data,
+com juros de mora desde o evento danoso (15/01/2020)."
+→ danoMoral: { valor: 20000, dataInicioCorrecao: [data sentença], indiceCorrecao: "IPCA", dataInicioJuros: "15/01/2020", tipoJuros: "1_PORCENTO" }
+
+</rule>
+
+<rule name="valor_unico">
+Se houver apenas um valor total de condenação SEM separação de verbas:
+- Preencha "valorPrincipal" com o valor total
+- Deixe "danoMaterial" e "danoMoral" como null
+- O sistema usará parâmetros globais para o cálculo
 </rule>
 
 <rule name="datas" priority="critical">
-As datas são essenciais para o cálculo correto. Procure atentamente:
+As datas são essenciais para o cálculo correto:
 
-- **dataAjuizamento**: "ajuizada em", "distribuída em", "proposta em", "data da distribuição", "protocolo inicial"
-  → Usada para correção monetária do dano MATERIAL
+- **dataAjuizamento**: "ajuizada em", "distribuída em", "proposta em", data da distribuição
+  → Usada como fallback para correção do dano material
 
-- **dataSentenca**: data de prolação da sentença, "julgado em", data no cabeçalho/rodapé, "proferida em", "sentenciado em"
-  → Usada para correção monetária do dano MORAL (Súmula 362 STJ)
+- **dataSentenca**: data de prolação da sentença, "julgado em", "proferida em"
+  → Usada como fallback para correção do dano moral
 
-- **dataCitacao**: "citado em", "citação válida em", "AR juntado em", "citação por edital", "comparecimento espontâneo"
-  → Usada para início dos juros de mora
+- **dataCitacao**: "citado em", "citação válida em", "AR juntado em"
+  → Usada como fallback para início dos juros de mora
 
-- **dataBase**: qualquer outra data mencionada como base para cálculo (fallback)
+- **dataEventoDanoso**: "evento ocorrido em", "acidente em", "data do fato"
+  → Usada para responsabilidade extracontratual (Súmula 54 STJ)
 
 Formato: DD/MM/YYYY (ex: 15/03/2022)
 </rule>
 
 <rule name="indice_correcao">
 Identifique qual índice de correção monetária a sentença determina:
-
-- "IPCA" → IPCA, Índice de Preços ao Consumidor Amplo, "índice oficial", "índice do IBGE"
+- "IPCA" → IPCA, IPCA-E, Índice de Preços ao Consumidor Amplo, "índice oficial"
 - "INPC" → INPC, Índice Nacional de Preços ao Consumidor
 - "IGP-M" → IGP-M, Índice Geral de Preços do Mercado
-- "SELIC" → correção pela taxa Selic
+- "SELIC" → correção pela taxa Selic (quando usar Selic como correção + juros)
 - "TR" → Taxa Referencial
 
-Se não especificado, deixe null.
+Se não especificado, use "IPCA" como padrão.
 </rule>
 
 <rule name="juros_mora">
 Identifique qual taxa de juros de mora a sentença determina:
-
 - "1_PORCENTO" → 1% ao mês, 12% ao ano, juros legais do Código Civil
 - "SELIC" → juros pela taxa Selic
 - "SELIC_MENOS_IPCA" → "Selic menos IPCA", "juros reais", EC 113/2021
 
-Se não especificado, deixe null.
+Se não especificado, use "1_PORCENTO" como padrão.
 </rule>
 
 <rule name="identificacao_processo">
@@ -149,8 +190,10 @@ Se não especificado, deixe null.
 <important>
 - Leia o documento completo antes de extrair os dados
 - Se uma informação não estiver claramente presente, use null
-- Números devem ser tipo number, não string
+- Números devem ser tipo number, não string (10000.00, não "10000.00")
 - Datas devem estar no formato DD/MM/YYYY
+- Priorize identificar parâmetros ESPECÍFICOS para cada verba
+- Se a sentença menciona datas diferentes para correção vs juros, capture isso
 - Retorne SOMENTE o JSON, nada mais
 </important>`
 
@@ -237,21 +280,42 @@ export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> 
       return 0
     }
 
+    // Função auxiliar para converter ConfiguracaoVerba
+    const parseConfigVerba = (v: unknown): ConfiguracaoVerba | undefined => {
+      if (!v || typeof v !== 'object') return undefined
+
+      const config = v as Record<string, unknown>
+      const valor = parseValor(config.valor)
+
+      if (valor <= 0) return undefined
+
+      return {
+        valor,
+        dataInicioCorrecao: normalizeDateBR(config.dataInicioCorrecao as string) || '',
+        indiceCorrecao: (config.indiceCorrecao as TipoIndice) || 'IPCA',
+        dataInicioJuros: normalizeDateBR(config.dataInicioJuros as string) || '',
+        tipoJuros: (config.tipoJuros as TipoJuros) || '1_PORCENTO'
+      }
+    }
+
     // Converte para formato esperado
-    const autores: Autor[] = (parsed.autores || []).map((a: {
-      nome: string
-      cpf?: string
-      valorPrincipal?: number
-      valorDanoMaterial?: number
-      valorDanoMoral?: number
-    }, i: number) => ({
-      id: `autor-${i + 1}`,
-      nome: a.nome,
-      cpf: a.cpf,
-      valorPrincipal: parseValor(a.valorPrincipal),
-      valorDanoMaterial: parseValor(a.valorDanoMaterial) || undefined,
-      valorDanoMoral: parseValor(a.valorDanoMoral) || undefined
-    }))
+    const autores: Autor[] = (parsed.autores || []).map((a: Record<string, unknown>, i: number) => {
+      const danoMaterial = parseConfigVerba(a.danoMaterial)
+      const danoMoral = parseConfigVerba(a.danoMoral)
+
+      return {
+        id: `autor-${i + 1}`,
+        nome: a.nome as string,
+        cpf: a.cpf as string | undefined,
+        // Novo formato
+        danoMaterial,
+        danoMoral,
+        // Legado
+        valorPrincipal: parseValor(a.valorPrincipal),
+        valorDanoMaterial: danoMaterial?.valor,
+        valorDanoMoral: danoMoral?.valor
+      }
+    })
 
     return {
       autores,
@@ -260,13 +324,11 @@ export async function extrairDadosSentenca(file: File): Promise<DadosExtraidos> 
       dataSentenca: normalizeDateBR(parsed.dataSentenca),
       dataCitacao: normalizeDateBR(parsed.dataCitacao),
       dataBase: normalizeDateBR(parsed.dataBase),
-      indiceCorrecao: parsed.indiceCorrecao as TipoIndice || undefined,
-      tipoJuros: parsed.tipoJuros as TipoJuros || undefined,
       tribunal: parsed.tribunal || undefined,
       numeroProcesso: parsed.numeroProcesso || undefined,
       vara: parsed.vara || undefined
     }
-  } catch (e) {
+  } catch {
     console.error('Erro ao parsear resposta:', jsonStr)
     throw new Error('Não foi possível extrair dados do documento')
   }
