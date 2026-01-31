@@ -98,6 +98,21 @@ worker/
 | **Material** | Desde ajuizamento | Desde citação | Art. 405 CC |
 | **Moral** | Desde sentença | Desde citação | Súmula 362 STJ |
 
+### Marco Inicial dos Juros
+
+O sistema permite configurar o marco inicial dos juros de mora:
+
+| Marco | Fundamento Legal | Quando Usar |
+|-------|-----------------|-------------|
+| **Citação** | Art. 405 CC | Regra geral - obrigações contratuais |
+| **Evento Danoso** | Súmula 54 STJ | Responsabilidade extracontratual (ilícito) |
+| **Desembolso** | Art. 398 CC | Danos emergentes com data específica de pagamento |
+
+**Tipos definidos em `src/types/index.ts`:**
+- `TipoMarcoJuros = 'CITACAO' | 'EVENTO_DANOSO' | 'DESEMBOLSO'`
+- `NOMES_MARCO_JUROS` - Labels para exibição
+- `FUNDAMENTOS_MARCO_JUROS` - Texto jurídico de cada marco
+
 ---
 
 ## Extração com Claude Opus 4.5
@@ -247,11 +262,97 @@ echo "sk-ant-xxx" | npx wrangler secret put ANTHROPIC_API_KEY
 
 ---
 
-## Branding
+## Design System
 
-- **Cores:** `#2f3a44` (primária), `#93784a` (dourado)
-- **Logo:** `src/assets/logo-lb.svg` (viewBox otimizado, fill branco)
-- **Fontes:** Trajan (títulos), Montserrat (corpo)
+Baseado no **Branding Book 2024** com estética **Light Mode Elegante**.
+
+### Filosofia de Design
+
+- **Clean & Professional**: Fundo cinza sutil com cards brancos
+- **Minimalista**: Whitespace generoso, bordas suaves (rounded-xl/2xl)
+- **Sofisticado**: Transições suaves (300ms), sombras sutis
+- **Premium**: Tipografia moderna, acentos dourados elegantes
+
+### Arquivos de Design
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/styles/design-tokens.ts` | Tokens de cor, tipografia, espaçamento |
+| `src/index.css` | Variáveis CSS + componentes customizados |
+| `tailwind.config.js` | Extensões do Tailwind com cores da marca |
+
+### Paleta de Cores
+
+| Nome | HEX | Variável CSS | Uso |
+|------|-----|--------------|-----|
+| Background | `#f3f4f6` | `--background` | Fundo da página |
+| Card | `#ffffff` | `--card` | Cards e superfícies |
+| Primary | `#2f3a44` | `--lb-primary` | Textos principais, header |
+| Secondary | `#424e5b` | `--lb-secondary` | Labels, textos secundários |
+| Gold | `#93784a` | `--lb-gold` | CTAs, botões, acentos |
+| Gold Light | `#a8896a` | - | Hover do gold |
+| Gray 50 | `#f9fafb` | - | Inputs, selects |
+| Gray 200 | `#e5e7eb` | - | Bordas |
+| Gray 400 | `#9ca3af` | - | Placeholders |
+| Gray 500 | `#6b7280` | - | Textos muted |
+
+### Tipografia
+
+| Elemento | Fonte | Peso | Características |
+|----------|-------|------|-----------------|
+| Headings | Plus Jakarta Sans | 600 | tracking-tight (-0.02em) |
+| Body | Plus Jakarta Sans | 400 | Legível, moderna |
+| Labels | Plus Jakarta Sans | 500 | Cor secondary |
+
+### Componentes Principais
+
+#### Cards
+```css
+/* Card padrão - branco com sombra suave */
+bg-white rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-md
+```
+
+#### Inputs
+```css
+/* Input com fundo cinza claro */
+bg-gray-50 border border-gray-200 rounded-xl
+focus:border-[#93784a] focus:bg-white focus:ring-2 focus:ring-[rgba(147,120,74,0.15)]
+```
+
+#### Botões
+```css
+/* Botão Gold - CTA principal */
+.btn-gold: bg-[#93784a] text-white rounded-xl shadow-lg hover:shadow-xl
+
+/* Botão Outline - secundário */
+bg-white border-gray-200 text-gray-600 hover:bg-gray-50
+```
+
+### Classes Utilitárias
+
+```css
+.shadow-gold      /* box-shadow: 0 4px 20px rgba(147,120,74,0.15) */
+.shadow-soft      /* Sombra suave para cards */
+.hover-lift       /* Elevação no hover com sombra */
+.animate-reveal   /* Animação de entrada (fade + slide up) */
+.text-gold        /* color: #93784a */
+.bg-gradient-gold /* Gradiente dourado */
+```
+
+### Espaçamento
+
+| Token | Valor | Uso |
+|-------|-------|-----|
+| Card padding | `py-5 px-6` | Padding interno dos cards |
+| Section gap | `space-y-8` | Entre seções principais |
+| Form gap | `space-y-4` | Entre campos de formulário |
+| Grid gap | `gap-4` | Entre colunas do grid |
+
+### Logo
+
+- **Arquivo:** `src/assets/logo-lb.svg`
+- **Exibição:** Container escuro (#2f3a44) com logo branco
+- **Tamanhos:** w-40 (mobile), w-48 (tablet), w-56 (desktop)
 
 ---
 

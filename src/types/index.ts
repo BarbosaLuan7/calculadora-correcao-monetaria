@@ -42,6 +42,8 @@ export type TipoIndice = 'IPCA' | 'INPC' | 'IGP-M' | 'SELIC' | 'TR'
 
 export type TipoJuros = 'SELIC' | '1_PORCENTO' | 'SELIC_MENOS_IPCA'
 
+export type TipoMarcoJuros = 'CITACAO' | 'EVENTO_DANOSO' | 'DESEMBOLSO'
+
 export interface DadosExtraidos {
   autores: Autor[]
   dataBase?: string // Data base para correção (legado)
@@ -120,4 +122,16 @@ export const NOMES_JUROS: Record<TipoJuros, string> = {
   'SELIC': 'Taxa Selic',
   '1_PORCENTO': '1% ao mês',
   'SELIC_MENOS_IPCA': 'Selic - IPCA'
+}
+
+export const NOMES_MARCO_JUROS: Record<TipoMarcoJuros, string> = {
+  'CITACAO': 'Data da Citação',
+  'EVENTO_DANOSO': 'Data do Evento Danoso',
+  'DESEMBOLSO': 'Data do Desembolso'
+}
+
+export const FUNDAMENTOS_MARCO_JUROS: Record<TipoMarcoJuros, string> = {
+  'CITACAO': 'Art. 405 CC - regra geral',
+  'EVENTO_DANOSO': 'Súmula 54 STJ - responsabilidade extracontratual',
+  'DESEMBOLSO': 'Data do efetivo prejuízo'
 }

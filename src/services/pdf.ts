@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import { type ResultadoCalculo, type ResultadoVerba, NOMES_INDICES, NOMES_JUROS, type TipoIndice, type TipoJuros } from '@/types'
+import { type ResultadoCalculo, type ResultadoVerba, NOMES_INDICES, NOMES_JUROS, NOMES_MARCO_JUROS, type TipoIndice, type TipoJuros, type TipoMarcoJuros } from '@/types'
 import { formatCurrency, formatPercent, formatDateToBR } from '@/lib/utils'
 
 interface DadosMemoria {
@@ -12,6 +12,7 @@ interface DadosMemoria {
   dataCalculo: string
   indiceCorrecao: TipoIndice
   tipoJuros: TipoJuros
+  marcoJuros?: TipoMarcoJuros
   resultados: ResultadoCalculo[]
 }
 
@@ -127,7 +128,8 @@ export function gerarMemoriaPDF(dados: DadosMemoria): jsPDF {
   if (dados.dataSentenca) {
     dados_processo.push(['Data Sentença:', dados.dataSentenca])
   }
-  dados_processo.push(['Data da Citação:', dados.dataCitacao])
+  const labelDataJuros = dados.marcoJuros ? NOMES_MARCO_JUROS[dados.marcoJuros] : 'Data da Citação'
+  dados_processo.push([`${labelDataJuros}:`, dados.dataCitacao])
   dados_processo.push(['Data do Cálculo:', dados.dataCalculo])
   dados_processo.push(['Índice de Correção:', NOMES_INDICES[dados.indiceCorrecao]])
   dados_processo.push(['Juros de Mora:', NOMES_JUROS[dados.tipoJuros]])

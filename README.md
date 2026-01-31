@@ -20,6 +20,7 @@ Ferramenta profissional para cálculo de correção monetária e juros de mora e
 - **Dano moral e material separados** com datas base distintas (conforme jurisprudência)
 - Índices oficiais do Banco Central do Brasil (IPCA, INPC, IGP-M, Selic, TR)
 - Juros de mora: 1% ao mês, Selic, ou Selic-IPCA (juros reais)
+- **Marco inicial dos juros configurável** (citação, evento danoso ou desembolso)
 - Suporte a múltiplos autores/exequentes
 
 ### Documentos Prontos para Uso
@@ -76,14 +77,37 @@ O sistema aplica automaticamente as regras corretas para cada tipo de verba:
 
 ---
 
+## Marco Inicial dos Juros
+
+| Marco | Fundamento | Quando Usar |
+|-------|------------|-------------|
+| **Citação** | Art. 405 CC | Regra geral - obrigações contratuais |
+| **Evento Danoso** | Súmula 54 STJ | Responsabilidade extracontratual |
+| **Desembolso** | Art. 398 CC | Danos emergentes com data de pagamento |
+
+---
+
 ## Tecnologias
 
 - **Frontend:** React 19 + TypeScript + Vite 7
 - **UI:** Tailwind CSS 3 + Radix UI (shadcn/ui)
+- **Design:** Design System próprio baseado no Branding Book 2024
 - **IA:** Claude Opus 4.5 (Anthropic) para extração de documentos
 - **APIs:** Banco Central do Brasil (séries temporais)
 - **Documentos:** jsPDF + docx
 - **Deploy:** GitHub Pages + Cloudflare Workers
+
+---
+
+## Design System
+
+Interface moderna e profissional baseada no **Branding Book 2024**:
+
+- **Tema:** Light mode elegante com fundo cinza sutil (#f3f4f6)
+- **Cards:** Brancos com sombras suaves
+- **Tipografia:** Plus Jakarta Sans (moderna e premium)
+- **Cores:** Primary (#2f3a44), Gold (#93784a) para CTAs
+- **Componentes:** Inputs arredondados, transições suaves (300ms)
 
 ---
 

@@ -1,7 +1,7 @@
 import { Download, FileText, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { type ResultadoCalculo, type TipoIndice, type TipoJuros, NOMES_INDICES, NOMES_JUROS } from '@/types'
+import { type ResultadoCalculo, type TipoIndice, type TipoJuros, type TipoMarcoJuros, NOMES_INDICES, NOMES_JUROS, NOMES_MARCO_JUROS } from '@/types'
 import { formatCurrency, formatPercent } from '@/lib/utils'
 import { salvarMemoriaPDF } from '@/services/pdf'
 import { salvarPeticaoDOCX } from '@/services/docx'
@@ -18,6 +18,7 @@ interface ResultPanelProps {
     dataCalculo: string
     indiceCorrecao: TipoIndice
     tipoJuros: TipoJuros
+    marcoJuros?: TipoMarcoJuros
   }
 }
 
@@ -60,6 +61,7 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
         </CardTitle>
         <CardDescription>
           Correção: {NOMES_INDICES[dadosProcesso.indiceCorrecao]} | Juros: {NOMES_JUROS[dadosProcesso.tipoJuros]}
+          {dadosProcesso.marcoJuros && ` (desde ${NOMES_MARCO_JUROS[dadosProcesso.marcoJuros].toLowerCase()})`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -191,21 +193,21 @@ export function ResultPanel({ resultados, dadosProcesso }: ResultPanelProps) {
         )}
 
         {/* Total em destaque */}
-        <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+        <div className="p-8 rounded-2xl border border-[#93784a]/30 bg-gradient-to-br from-[#93784a]/5 to-[#93784a]/10">
           <div className="text-center">
-            <p className="text-sm text-muted-foreground mb-1">Valor Total do Crédito</p>
-            <p className="text-3xl font-bold text-primary">{formatCurrency(totais.total)}</p>
+            <p className="text-sm text-gray-500 mb-3 font-medium tracking-wide uppercase">Valor Total do Crédito</p>
+            <p className="text-4xl sm:text-5xl font-bold text-[#93784a] tracking-tight">{formatCurrency(totais.total)}</p>
           </div>
         </div>
 
         {/* Botões de download */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button onClick={handleDownloadPDF} className="flex-1">
-            <Download className="h-4 w-4 mr-2" />
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Button onClick={handleDownloadPDF} variant="gold" className="flex-1 h-12 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
+            <Download className="h-5 w-5 mr-2" />
             Baixar Memória de Cálculo (PDF)
           </Button>
-          <Button onClick={handleDownloadDOCX} variant="outline" className="flex-1">
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
+          <Button onClick={handleDownloadDOCX} variant="outline" className="flex-1 h-12 rounded-xl bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-[#2f3a44] hover:border-gray-300 transition-all duration-300">
+            <FileSpreadsheet className="h-5 w-5 mr-2" />
             Baixar Petição (DOCX)
           </Button>
         </div>

@@ -19,10 +19,13 @@ import {
   type Autor,
   type TipoIndice,
   type TipoJuros,
+  type TipoMarcoJuros,
   type DadosExtraidos,
   type ResultadoCalculo,
   NOMES_INDICES,
-  NOMES_JUROS
+  NOMES_JUROS,
+  NOMES_MARCO_JUROS,
+  FUNDAMENTOS_MARCO_JUROS
 } from '@/types'
 import { calcularCorrecaoMultiplosAutores } from '@/services/calculo'
 import { verificarConexaoBCB } from '@/services/bcb'
@@ -42,6 +45,7 @@ export function Calculator() {
 
   const [indiceCorrecao, setIndiceCorrecao] = useState<TipoIndice>('IPCA')
   const [tipoJuros, setTipoJuros] = useState<TipoJuros>('1_PORCENTO')
+  const [marcoJuros, setMarcoJuros] = useState<TipoMarcoJuros>('CITACAO')
   const [autores, setAutores] = useState<Autor[]>([{
     id: 'autor-1',
     nome: '',
@@ -87,7 +91,7 @@ export function Calculator() {
   const handleCalcular = async () => {
     // Validações
     if (!dataCitacao) {
-      setError('Informe a data da citação')
+      setError(`Informe a ${NOMES_MARCO_JUROS[marcoJuros].toLowerCase()}`)
       return
     }
 
@@ -149,38 +153,56 @@ export function Calculator() {
     setDataCalculo(formatDateToBR(new Date()))
     setIndiceCorrecao('IPCA')
     setTipoJuros('1_PORCENTO')
+    setMarcoJuros('CITACAO')
     setAutores([{ id: 'autor-1', nome: '', valorPrincipal: 0 }])
     setResultados([])
     setError(null)
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
-      {/* Header */}
-      <header className="bg-[#2f3a44] -mx-4 -mt-4 px-4 py-8 sm:py-10 mb-6 rounded-b-lg">
-        <div className="flex flex-col items-center gap-5">
-          {/* Logo responsiva: maior em desktop, menor em mobile */}
-          <img
-            src={LogoLB}
-            alt="Luan Barbosa Advocacia Especializada"
-            className="w-64 sm:w-80 md:w-96 lg:w-[28rem] h-auto max-w-full"
-          />
-          <div className="text-center space-y-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-light tracking-wider text-white flex items-center justify-center gap-2">
-              <CalculatorIcon className="h-5 w-5 sm:h-6 sm:w-6 text-[#93784a]" />
-              Calculadora de Correção Monetária
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-300">
-              Correção monetária e juros de mora para cumprimento de sentença
-            </p>
+    <div className="min-h-screen bg-[#f3f4f6]">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+
+        {/* Header - Light Premium */}
+        <header className="text-center pt-6 pb-8 animate-reveal">
+          <div className="flex flex-col items-center gap-6">
+            {/* Logo */}
+            <div className="bg-[#2f3a44] px-8 py-4 rounded-2xl">
+              <img
+                src={LogoLB}
+                alt="Luan Barbosa Advocacia Especializada"
+                className="w-40 sm:w-48 md:w-56 h-auto"
+              />
+            </div>
+
+            {/* Title */}
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
+                <CalculatorIcon className="h-5 w-5 text-[#93784a]" />
+                <span className="text-sm font-medium text-gray-600">Cumprimento de Sentença</span>
+              </div>
+
+              <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-[#2f3a44]">
+                Calculadora de{' '}
+                <span className="text-[#93784a]">Correção Monetária</span>
+              </h1>
+
+              <p className="text-base text-gray-500 font-light max-w-lg mx-auto">
+                Calcule correção monetária e juros de mora com precisão
+              </p>
+            </div>
+
+            {/* Status */}
+            {bcbOnline !== null && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200 shadow-sm">
+                <span className={`w-2 h-2 rounded-full ${bcbOnline ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className="text-xs text-gray-500 font-medium">
+                  API Banco Central: {bcbOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+            )}
           </div>
-        </div>
-        {bcbOnline !== null && (
-          <p className={`text-xs text-center mt-3 ${bcbOnline ? 'text-green-400' : 'text-yellow-400'}`}>
-            API BCB: {bcbOnline ? 'Online' : 'Offline (usando cache)'}
-          </p>
-        )}
-      </header>
+        </header>
 
       {/* Upload de documento */}
       <DocumentUpload
@@ -247,7 +269,7 @@ export function Calculator() {
                 value={dataAjuizamento}
                 onChange={(e) => setDataAjuizamento(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-400">
                 Correção monetária do dano material
               </p>
             </div>
@@ -259,22 +281,45 @@ export function Calculator() {
                 value={dataSentenca}
                 onChange={(e) => setDataSentenca(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-400">
                 Correção monetária do dano moral (Súmula 362 STJ)
               </p>
             </div>
           </div>
 
+          {/* Marco inicial dos juros */}
+          <div className="space-y-2">
+            <Label htmlFor="marcoJuros">Marco Inicial dos Juros</Label>
+            <Select
+              value={marcoJuros}
+              onValueChange={(v) => setMarcoJuros(v as TipoMarcoJuros)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(NOMES_MARCO_JUROS).map(([key, nome]) => (
+                  <SelectItem key={key} value={key}>
+                    {nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#93784a]">
+              {FUNDAMENTOS_MARCO_JUROS[marcoJuros]}
+            </p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="dataCitacao">Data da Citação *</Label>
+              <Label htmlFor="dataCitacao">{NOMES_MARCO_JUROS[marcoJuros]} *</Label>
               <Input
                 id="dataCitacao"
                 placeholder="DD/MM/AAAA"
                 value={dataCitacao}
                 onChange={(e) => setDataCitacao(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-400">
                 Início dos juros de mora (obrigatório)
               </p>
             </div>
@@ -286,7 +331,7 @@ export function Calculator() {
                 value={dataCalculo}
                 onChange={(e) => setDataCalculo(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-gray-400">
                 Data final do cálculo (geralmente hoje)
               </p>
             </div>
@@ -348,33 +393,40 @@ export function Calculator() {
       <AuthorList autores={autores} onChange={setAutores} />
 
       {/* Botões de ação */}
-      <div className="flex gap-3">
+      <div className="flex gap-4 pt-4">
         <Button
+          variant="gold"
           onClick={handleCalcular}
           disabled={isCalculating}
-          className="flex-1"
+          className="flex-1 h-14 rounded-xl text-base font-semibold shadow-lg hover:shadow-xl transition-shadow"
+          size="lg"
         >
           {isCalculating ? (
             <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
               Calculando...
             </>
           ) : (
             <>
-              <CalculatorIcon className="h-4 w-4 mr-2" />
+              <CalculatorIcon className="h-5 w-5 mr-2" />
               Calcular Correção
             </>
           )}
         </Button>
-        <Button variant="outline" onClick={handleLimpar}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button
+          variant="outline"
+          onClick={handleLimpar}
+          size="lg"
+          className="h-14 rounded-xl bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-[#2f3a44] hover:border-gray-300 transition-all duration-300"
+        >
+          <RefreshCw className="h-5 w-5 mr-2" />
           Limpar
         </Button>
       </div>
 
       {/* Erro */}
       {error && (
-        <div className="p-4 bg-destructive/10 text-destructive rounded-lg">
+        <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-200">
           {error}
         </div>
       )}
@@ -391,9 +443,12 @@ export function Calculator() {
           dataCitacao,
           dataCalculo,
           indiceCorrecao,
-          tipoJuros
+          tipoJuros,
+          marcoJuros
         }}
       />
+
+      </div>
     </div>
   )
 }

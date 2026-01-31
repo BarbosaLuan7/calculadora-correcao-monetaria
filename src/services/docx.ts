@@ -12,7 +12,7 @@ import {
   Packer
 } from 'docx'
 import { saveAs } from 'file-saver'
-import { type ResultadoCalculo, NOMES_INDICES, NOMES_JUROS, type TipoIndice, type TipoJuros } from '@/types'
+import { type ResultadoCalculo, NOMES_INDICES, NOMES_JUROS, NOMES_MARCO_JUROS, type TipoIndice, type TipoJuros, type TipoMarcoJuros } from '@/types'
 import { formatCurrency, formatDateToBR } from '@/lib/utils'
 
 interface DadosPeticao {
@@ -23,6 +23,7 @@ interface DadosPeticao {
   dataCalculo: string
   indiceCorrecao: TipoIndice
   tipoJuros: TipoJuros
+  marcoJuros?: TipoMarcoJuros
   resultados: ResultadoCalculo[]
   nomeAdvogado?: string
   oabAdvogado?: string
@@ -34,6 +35,7 @@ interface DadosPeticao {
 export function gerarPeticaoDOCX(dados: DadosPeticao): Document {
   const totalGeral = dados.resultados.reduce((sum, r) => sum + r.valorTotal, 0)
   const listaAutores = dados.resultados.map(r => r.autor.nome).join(', ')
+  const labelMarcoJuros = dados.marcoJuros ? NOMES_MARCO_JUROS[dados.marcoJuros].toLowerCase() : 'citação'
 
   const doc = new Document({
     sections: [{
@@ -156,7 +158,7 @@ export function gerarPeticaoDOCX(dados: DadosPeticao): Document {
           alignment: AlignmentType.JUSTIFIED,
           children: [
             new TextRun({
-              text: `A sentença proferida nestes autos determinou o pagamento de valores ao(s) exequente(s), devidamente corrigidos monetariamente pelo ${NOMES_INDICES[dados.indiceCorrecao]} desde a data base, acrescidos de juros de mora de ${NOMES_JUROS[dados.tipoJuros]} a partir da citação (${dados.dataCitacao}).`,
+              text: `A sentença proferida nestes autos determinou o pagamento de valores ao(s) exequente(s), devidamente corrigidos monetariamente pelo ${NOMES_INDICES[dados.indiceCorrecao]} desde a data base, acrescidos de juros de mora de ${NOMES_JUROS[dados.tipoJuros]} a partir da ${labelMarcoJuros} (${dados.dataCitacao}).`,
               size: 24
             })
           ]

@@ -1,37 +1,266 @@
+/**
+ * Luan Barbosa Advocacia - Design System CSS
+ * Baseado no Branding Book 2024
+ */
+
+/* Fontes - Design Moderno/Zen */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* =============================================================================
+   VARIÁVEIS CSS - DESIGN TOKENS
+   ============================================================================= */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* =======================================================================
+       LIGHT MODE SUTIL - Cinza elegante com cards brancos
+       ======================================================================= */
+
+    /* Cores da Marca (Branding Book 2024) */
+    --lb-primary: 207 18% 23%;          /* #2f3a44 - Pantone 432 C */
+    --lb-secondary: 210 16% 30%;        /* #424e5b - Pantone 7545 C */
+    --lb-navy: 202 49% 22%;             /* #1c3f53 - Pantone 302 C */
+    --lb-slate: 200 35% 32%;            /* #325c71 - Pantone 7699 C */
+    --lb-gold: 38 33% 43%;              /* #93784a - Pantone 872 C */
+
+    /* Light theme - cinza sutil */
+    --background: 220 14% 96%;          /* Cinza muito claro #f3f4f6 */
+    --foreground: 207 18% 20%;          /* Texto escuro */
+
+    --card: 0 0% 100%;                  /* Cards brancos */
+    --card-foreground: 207 18% 20%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 207 18% 20%;
+
+    /* Primary usa a cor da marca */
+    --primary: 207 18% 23%;             /* #2f3a44 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary cinza suave */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 207 18% 23%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 215 14% 45%;
+
+    /* Accent dourado */
+    --accent: 38 33% 43%;               /* #93784a */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 38 33% 43%;
+
+    --radius: 0.75rem;
+
+    /* Cores para uso direto */
+    --color-gold: #93784a;
+    --color-gold-dark: #7d654a;
+    --color-primary: #2f3a44;
+    --color-secondary: #424e5b;
+    --color-bg: #f3f4f6;
+    --color-card: #ffffff;
   }
+
+  /* ==========================================================================
+     ESTILOS BASE - Light Mode Elegante
+     ========================================================================== */
 
   * {
     @apply border-border;
   }
 
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+  html {
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
   }
+
+  body {
+    @apply text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-weight: 400;
+    background: #f3f4f6;
+    min-height: 100vh;
+  }
+
+  /* Títulos modernos */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #2f3a44;
+  }
+
+  /* Scrollbar sutil */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(47, 58, 68, 0.2);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(47, 58, 68, 0.3);
+  }
+}
+
+/* =============================================================================
+   COMPONENTES CUSTOMIZADOS - Dark Mode Premium
+   ============================================================================= */
+
+@layer components {
+  /* Botão dourado - CTA principal */
+  .btn-gold {
+    @apply bg-[#93784a] text-white font-semibold px-6 py-3 rounded-xl;
+    @apply hover:bg-[#a8896a] transition-all duration-300 ease-out;
+    @apply hover:-translate-y-0.5;
+    box-shadow: 0 4px 14px rgba(147, 120, 74, 0.25);
+  }
+
+  .btn-gold:hover {
+    box-shadow: 0 6px 20px rgba(147, 120, 74, 0.35);
+  }
+
+  /* Botão secundário */
+  .btn-secondary {
+    @apply bg-gray-50 text-gray-700 font-medium px-6 py-3 rounded-xl border border-gray-200;
+    @apply hover:bg-gray-100 hover:text-gray-900 transition-all duration-300 ease-out;
+  }
+
+  /* Card Light - limpo e elegante */
+  .card-light {
+    @apply bg-white rounded-2xl transition-all duration-300 ease-out;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .card-light:hover {
+    border-color: rgba(147, 120, 74, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Texto dourado */
+  .text-gold {
+    color: #93784a;
+  }
+
+  /* Borda dourada sutil */
+  .border-gold {
+    border-color: rgba(147, 120, 74, 0.3);
+  }
+
+  /* Background da marca */
+  .bg-lb-primary {
+    background-color: #2f3a44;
+  }
+
+  .bg-lb-gold {
+    background-color: #93784a;
+  }
+
+  /* Badge/Chip */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium;
+    background: rgba(147, 120, 74, 0.1);
+    color: #93784a;
+    border: 1px solid rgba(147, 120, 74, 0.2);
+  }
+
+  /* Status indicator */
+  .status-online {
+    @apply w-2 h-2 rounded-full bg-emerald-500;
+  }
+
+  .status-offline {
+    @apply w-2 h-2 rounded-full bg-amber-500;
+  }
+}
+
+/* =============================================================================
+   UTILITÁRIOS - Dark Mode Premium
+   ============================================================================= */
+
+@layer utilities {
+  /* Fonte moderna */
+  .font-heading {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .font-body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  /* Tracking */
+  .tracking-tight {
+    letter-spacing: -0.02em;
+  }
+
+  /* Sombra dourada suave */
+  .shadow-gold {
+    box-shadow: 0 4px 20px rgba(147, 120, 74, 0.15);
+  }
+
+  .shadow-gold-sm {
+    box-shadow: 0 2px 10px rgba(147, 120, 74, 0.12);
+  }
+
+  /* Sombra suave para cards */
+  .shadow-soft {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Gradiente dourado */
+  .bg-gradient-gold {
+    background: linear-gradient(135deg, #93784a 0%, #a8896a 100%);
+  }
+
+  /* Hover lift */
+  .hover-lift {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Animação de reveal */
+  .animate-reveal {
+    animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    opacity: 0;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Delays para stagger */
+  .delay-100 { animation-delay: 0.1s; }
+  .delay-200 { animation-delay: 0.2s; }
+  .delay-300 { animation-delay: 0.3s; }
+  .delay-400 { animation-delay: 0.4s; }
+  .delay-500 { animation-delay: 0.5s; }
 }
