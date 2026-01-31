@@ -5,9 +5,11 @@
 Calculadora de correção monetária para cumprimento de sentença judicial, desenvolvida para **Luan Barbosa Advocacia Especializada**.
 
 Calcula correção monetária (IPCA, INPC, IGP-M, Selic, TR) e juros de mora com suporte a:
-- Dano moral e material separados (datas base distintas)
+- **4 parâmetros independentes por verba** (dano material e moral)
 - Múltiplos autores/exequentes
 - Extração automática de sentenças via IA
+- **Lei 14.905/2024** (Taxa Legal: Selic - IPCA)
+- Presets de sentença (Clássica, Extracontratual)
 
 **URL de Produção:** https://barbosaluan7.github.io/calculadora-correcao-monetaria/
 
@@ -112,6 +114,39 @@ O sistema permite configurar o marco inicial dos juros de mora:
 - `TipoMarcoJuros = 'CITACAO' | 'EVENTO_DANOSO' | 'DESEMBOLSO'`
 - `NOMES_MARCO_JUROS` - Labels para exibição
 - `FUNDAMENTOS_MARCO_JUROS` - Texto jurídico de cada marco
+
+### Sistema de 4 Parâmetros por Verba (v2.0)
+
+Cada verba (dano material ou moral) possui parâmetros independentes:
+
+```typescript
+interface ConfiguracaoVerba {
+  valor: number
+  dataInicioCorrecao: string      // DD/MM/YYYY
+  indiceCorrecao: TipoIndice      // IPCA, INPC, IGP-M, SELIC, TR
+  dataInicioJuros: string         // DD/MM/YYYY
+  tipoJuros: TipoJuros            // 1_PORCENTO, SELIC, SELIC_MENOS_IPCA
+}
+```
+
+### Lei 14.905/2024 - Taxa Legal
+
+A partir de 30/08/2024, a nova taxa legal de juros é **Selic - IPCA**:
+
+| Regime | Juros de Mora | Período |
+|--------|---------------|---------|
+| Antigo | 1% ao mês | Até 29/08/2024 |
+| **Novo (Lei 14.905/2024)** | **Selic - IPCA** | A partir de 30/08/2024 |
+
+- Tipo no sistema: `SELIC_MENOS_IPCA`
+- Série BCB Taxa Legal: `29543`
+
+### Presets de Sentença
+
+| Preset | Descrição | Juros |
+|--------|-----------|-------|
+| **Clássica** | Art. 405 CC | Desde citação |
+| **Extracontratual** | Súmula 54 STJ | Desde evento danoso |
 
 ---
 
@@ -277,7 +312,9 @@ Baseado no **Branding Book 2024** com estética **Light Mode Elegante**.
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `src/styles/design-tokens.ts` | Tokens de cor, tipografia, espaçamento |
+| `docs/DESIGN-SYSTEM.md` | Documentação completa do Design System |
+| `docs/design-system-starter.css` | CSS pronto para novos projetos |
+| `docs/tailwind.config.starter.js` | Config Tailwind para novos projetos |
 | `src/index.css` | Variáveis CSS + componentes customizados |
 | `tailwind.config.js` | Extensões do Tailwind com cores da marca |
 
@@ -356,11 +393,35 @@ bg-white border-gray-200 text-gray-600 hover:bg-gray-50
 
 ---
 
+## Metadados BCB
+
+O sistema rastreia e exibe informações sobre consultas à API do BCB:
+
+```typescript
+interface BCBMetadata {
+  online: boolean
+  ultimaAtualizacao: Date | null
+  seriesConsultadas: {
+    tipo: TipoIndice
+    codigo: number
+    registros: number
+  }[]
+}
+```
+
+**Onde aparece:**
+- UI: Header (séries + hora da consulta)
+- UI: Card verde no ResultPanel
+- PDF: Card verde + rodapé com séries
+
+---
+
 ## TODO / Melhorias Futuras
 
 ### Prioridade Alta
 - [ ] Adicionar testes unitários para cálculos
 - [ ] Validação de datas no frontend
+- [ ] Suporte à Taxa Legal (série BCB 29543) - juros simples
 
 ### Prioridade Média
 - [ ] PWA para uso offline completo
@@ -370,3 +431,11 @@ bg-white border-gray-200 text-gray-600 hover:bg-gray-50
 ### Prioridade Baixa
 - [ ] Exportar para Excel
 - [ ] Domínio customizado
+
+### Concluído Recentemente ✅
+- [x] 4 parâmetros independentes por verba (ConfiguracaoVerba)
+- [x] Presets de sentença (Clássica, Extracontratual)
+- [x] Suporte a Lei 14.905/2024 (Selic - IPCA)
+- [x] PDF redesenhado com design profissional
+- [x] Indicadores de fonte BCB (séries, hora, registros)
+- [x] Design System documentado (docs/DESIGN-SYSTEM.md)
